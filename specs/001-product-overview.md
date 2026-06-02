@@ -1,0 +1,180 @@
+# Visão geral do produto
+
+## Objetivo
+
+Desenvolver o SensorHub, uma solução para monitoramento de ambientes usando sensores IoT.
+
+O sistema deve permitir que usuários cadastrem dispositivos por UUID, associem esses dispositivos a ambientes e acompanhem temperatura, umidade, última atualização e histórico de medições pelo aplicativo mobile.
+
+O projeto será desenvolvido em fases. A primeira fase deve priorizar a definição dos contratos de dados, o modelo de domínio, a persistência em PostgreSQL, um simulador de sensores em Python, uma API em Java 25 com Spring Boot e um app mobile em Flutter.
+
+## Escopo da primeira fase
+
+Incluído na primeira fase:
+
+- Especificação do JSON produzido pelos sensores.
+- Especificação dos domínios principais, atributos, tabelas e relacionamentos.
+- Banco de dados PostgreSQL.
+- Script Python para simular sensores e persistir medições no PostgreSQL.
+- API em Java 25 com Spring Boot, JPA e Flyway.
+- Aplicativo Flutter para cadastrar dispositivos, associar ambientes e visualizar medições.
+- Docker Compose para executar os serviços criados e suas dependências.
+
+Fora da primeira fase:
+
+- Firmware ou integração com sensor físico real.
+- Broker MQTT real.
+- Worker MQTT em Java puro.
+- Alertas push.
+- Controle remoto de dispositivos.
+- Automações.
+- Multiusuário avançado.
+- Dashboard web.
+- Provisionamento automático de hardware.
+
+## Stack definida
+
+- Aplicativo mobile: Flutter.
+- API/backend: Java 25, Spring Boot, JPA e Flyway.
+- Banco de dados: PostgreSQL.
+- Simulador de sensores: Python.
+- Execução local e integração entre serviços: Docker Compose.
+- Worker MQTT futuro: Java puro, com uso mínimo de frameworks.
+
+## Usuários e sistemas envolvidos
+
+- Usuário final: cadastra dispositivos, organiza ambientes e consulta medições.
+- Simulador Python: gera leituras mockadas de sensores e persiste dados no PostgreSQL na primeira fase.
+- API: expõe dados e operações para o aplicativo mobile.
+- Banco de dados: armazena ambientes, dispositivos e medições.
+- App mobile: interface principal do usuário.
+- Dispositivo físico: publicará leituras de sensores via MQTT em fase futura.
+- Worker MQTT: consumirá mensagens MQTT e persistirá medições em fase futura.
+
+## Fluxo da primeira fase
+
+1. A estrutura de dados dos sensores é especificada em JSON.
+2. Os domínios, atributos, tabelas e relacionamentos são definidos.
+3. O PostgreSQL é configurado no Docker Compose.
+4. O script Python gera leituras simuladas de temperatura e umidade.
+5. O script Python persiste as medições no PostgreSQL.
+6. A API consulta e gerencia os dados persistidos.
+7. O app Flutter consome a API para exibir leitura atual e histórico.
+
+## Fluxo futuro com MQTT
+
+1. O dispositivo físico publica uma leitura MQTT contendo seu UUID, temperatura, umidade e timestamp.
+2. O worker MQTT em Java puro consome a mensagem.
+3. O worker valida o payload, identifica o dispositivo e normaliza os dados quando necessário.
+4. Leituras válidas são armazenadas no PostgreSQL.
+5. A API consulta os dados persistidos.
+6. O app Flutter exibe leitura atual, última atualização e histórico.
+
+## Contrato inicial do sensor
+
+O JSON abaixo representa o formato inicial esperado para leituras de sensores. Na primeira fase, ele será produzido pelo simulador Python. Em fase futura, servirá como base para o payload MQTT.
+
+```json
+{
+  "deviceUuid": "2f4a7d8e-3b6a-4a5c-9f2b-8f4d0d8f3c21",
+  "temperature": 24.7,
+  "humidity": 58.2,
+  "measuredAt": "2026-06-01T14:30:00Z"
+}
+```
+
+Campos:
+
+- `deviceUuid`: UUID do dispositivo que gerou a leitura.
+- `temperature`: temperatura em graus Celsius.
+- `humidity`: umidade relativa do ar em percentual.
+- `measuredAt`: timestamp da medição informado pelo sensor ou simulador.
+
+O campo `receivedAt` não deve vir do sensor. Ele deve ser definido pelo sistema no momento em que a medição for persistida.
+
+## Entidades iniciais
+
+### Device
+
+Representa o sensor físico ou simulado.
+
+Campos esperados:
+
+- `uuid`
+- `name`
+- `environmentId`
+- `lastSeenAt`
+- `createdAt`
+- `updatedAt`
+
+Relacionamentos:
+
+- Um dispositivo pode estar associado a no máximo um ambiente.
+- Um dispositivo pode possuir várias medições.
+
+### Environment
+
+Representa um ambiente monitorado, como quarto, sala, escritório ou laboratório.
+
+Campos esperados:
+
+- `id`
+- `name`
+- `createdAt`
+- `updatedAt`
+
+Relacionamentos:
+
+- Um ambiente pode possuir vários dispositivos.
+
+### Measurement
+
+Representa uma leitura recebida de um sensor físico ou simulado.
+
+Campos esperados:
+
+- `id`
+- `deviceUuid`
+- `temperature`
+- `humidity`
+- `measuredAt`
+- `receivedAt`
+
+Relacionamentos:
+
+- Uma medição pertence a um dispositivo.
+
+## Regras iniciais
+
+- UUID de dispositivo deve ser único.
+- Um dispositivo pode estar associado a no máximo um ambiente por vez.
+- Uma medição deve estar vinculada a um UUID de dispositivo.
+- Temperatura e umidade devem ser numéricas.
+- Umidade deve representar percentual.
+- O sistema deve diferenciar timestamp informado pelo sensor de timestamp de recebimento.
+- Um dispositivo sem medições recentes deve poder ser exibido como desatualizado.
+- Toda aplicação criada deve ter execução prevista no Docker Compose.
+
+## Critérios de aceite da primeira fase
+
+- Existe uma especificação clara do JSON de leitura do sensor.
+- Existem definições iniciais de domínios, atributos, tabelas e relacionamentos.
+- PostgreSQL sobe via Docker Compose.
+- Script Python gera medições simuladas.
+- Script Python persiste medições no PostgreSQL.
+- API Java 25/Spring Boot consulta os dados persistidos.
+- API possui migrations iniciais com Flyway.
+- App Flutter consegue cadastrar dispositivo por UUID.
+- App Flutter consegue associar dispositivo a ambiente.
+- App Flutter mostra leitura atual de temperatura e umidade.
+- App Flutter mostra histórico básico de medições.
+- App Flutter mostra quando foi a última atualização do dispositivo.
+
+## Pontos em aberto
+
+- Estratégia de autenticação.
+- Estratégia de deploy em produção.
+- Política para dispositivos que enviam dados antes de serem cadastrados pelo usuário.
+- Broker MQTT que será usado na fase futura.
+- Formato final dos tópicos MQTT.
+- Detalhes de firmware ou hardware físico.
