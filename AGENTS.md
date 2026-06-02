@@ -194,15 +194,16 @@ Quando não for possível testar, explique claramente o motivo e o risco restant
 2. Especificar o JSON produzido pelos sensores, mesmo que inicialmente seja usado apenas pelo simulador.
 3. Especificar os domínios principais: dispositivo, ambiente e medição.
 4. Especificar atributos, tabelas, relacionamentos e regras de integridade para PostgreSQL.
-5. Definir a estratégia de dados mockados para a primeira fase.
-6. Criar o script Python para simular sensores e persistir medições no PostgreSQL.
-7. Incluir PostgreSQL e script Python no Docker Compose.
-8. Criar scaffold da API em Java 25 com Spring Boot, JPA e Flyway.
-9. Implementar migrations iniciais com Flyway.
-10. Implementar endpoints iniciais para cadastro de dispositivo, ambientes, leitura atual e histórico.
-11. Incluir a API no Docker Compose.
-12. Criar scaffold do app Flutter.
-13. Implementar fluxos do app para cadastro de dispositivo, associação a ambiente, leitura atual e histórico.
-14. Incluir o app mobile no fluxo de desenvolvimento previsto pelo Docker Compose quando aplicável.
-15. Em fase posterior, especificar e implementar o firmware ou integração com sensor físico.
-16. Em fase posterior, especificar e implementar o worker MQTT em Java puro.
+5. Incluir PostgreSQL no Docker Compose.
+6. Criar scaffold da API em Java 25 com Spring Boot, JPA e Flyway.
+7. Implementar migrations iniciais com Flyway dentro da API.
+8. Implementar endpoints iniciais para cadastro de dispositivo, ambientes, leitura atual e histórico.
+9. Incluir a API no Docker Compose.
+10. Definir a estratégia de dados mockados para a primeira fase.
+11. Criar o script Python para simular sensores e persistir medições no PostgreSQL.
+12. Incluir o script Python no Docker Compose.
+13. Criar scaffold do app Flutter.
+14. Implementar fluxos do app para cadastro de dispositivo, associação a ambiente, leitura atual e histórico.
+15. Incluir o app mobile no fluxo de desenvolvimento previsto pelo Docker Compose quando aplicável.
+16. Em fase posterior, especificar e implementar o firmware ou integração com sensor físico.
+17. Em fase posterior, especificar e implementar o worker MQTT em Java puro.
