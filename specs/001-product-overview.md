@@ -76,7 +76,7 @@ O JSON abaixo representa o formato inicial esperado para leituras de sensores. N
 
 ```json
 {
-  "deviceUuid": "2f4a7d8e-3b6a-4a5c-9f2b-8f4d0d8f3c21",
+  "hardwareUuid": "2f4a7d8e-3b6a-4a5c-9f2b-8f4d0d8f3c21",
   "temperature": 24.7,
   "temperatureUnit": "CELSIUS",
   "humidity": 58.2,
@@ -87,7 +87,7 @@ O JSON abaixo representa o formato inicial esperado para leituras de sensores. N
 
 Campos:
 
-- `deviceUuid`: UUID do dispositivo que gerou a leitura.
+- `hardwareUuid`: UUID físico do dispositivo que gerou a leitura, definido pelo firmware ou simulador.
 - `temperature`: temperatura medida pelo sensor.
 - `temperatureUnit`: unidade da temperatura medida, inicialmente `CELSIUS`.
 - `humidity`: umidade medida pelo sensor.
@@ -125,6 +125,7 @@ Representa o sensor físico ou simulado.
 Campos esperados:
 
 - `uuid`
+- `hardwareUuid`
 - `userUuid`
 - `name`
 - `environmentUuid`
@@ -138,6 +139,8 @@ Relacionamentos:
 - Um dispositivo pode estar associado a no máximo um ambiente.
 - Um dispositivo pode não estar associado a nenhum ambiente.
 - Um dispositivo pode possuir várias medições.
+- O `uuid` do dispositivo é o identificador interno do registro no sistema.
+- O `hardwareUuid` é o identificador físico informado pelo firmware ou simulador.
 
 ### Environment
 
@@ -179,13 +182,16 @@ Relacionamentos:
 ## Regras iniciais
 
 - UUID de usuário deve ser único.
-- UUID de dispositivo deve ser único.
+- UUID de dispositivo deve ser único e gerado pelo banco como chave primária.
+- `hardwareUuid` de dispositivo deve ser único e obrigatório.
+- O cadastro de um dispositivo deve receber o `hardwareUuid` vindo do firmware ou simulador.
 - Um dispositivo deve pertencer a um usuário.
 - Um ambiente deve pertencer a um usuário.
 - Um dispositivo pode estar associado a no máximo um ambiente por vez.
 - Associação de dispositivo a ambiente é opcional.
 - Quando um dispositivo estiver associado a um ambiente, ambos devem pertencer ao mesmo usuário.
-- Uma medição deve estar vinculada a um UUID de dispositivo.
+- Uma medição deve estar vinculada ao UUID interno de um dispositivo.
+- Payloads de sensores devem identificar o dispositivo por `hardwareUuid`; o sistema deve resolver esse valor para o UUID interno do dispositivo antes de persistir a medição.
 - Temperatura e umidade devem ser numéricas.
 - Umidade deve representar percentual.
 - Temperatura deve armazenar a unidade de medida informada pelo sensor, inicialmente `CELSIUS`.
