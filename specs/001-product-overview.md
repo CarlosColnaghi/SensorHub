@@ -78,7 +78,9 @@ O JSON abaixo representa o formato inicial esperado para leituras de sensores. N
 {
   "deviceUuid": "2f4a7d8e-3b6a-4a5c-9f2b-8f4d0d8f3c21",
   "temperature": 24.7,
+  "temperatureUnit": "CELSIUS",
   "humidity": 58.2,
+  "humidityUnit": "RELATIVE_PERCENT",
   "measuredAt": "2026-06-01T14:30:00Z"
 }
 ```
@@ -86,13 +88,35 @@ O JSON abaixo representa o formato inicial esperado para leituras de sensores. N
 Campos:
 
 - `deviceUuid`: UUID do dispositivo que gerou a leitura.
-- `temperature`: temperatura em graus Celsius.
-- `humidity`: umidade relativa do ar em percentual.
+- `temperature`: temperatura medida pelo sensor.
+- `temperatureUnit`: unidade da temperatura medida, inicialmente `CELSIUS`.
+- `humidity`: umidade medida pelo sensor.
+- `humidityUnit`: unidade da umidade medida, inicialmente `RELATIVE_PERCENT`.
 - `measuredAt`: timestamp da medição informado pelo sensor ou simulador.
 
 O campo `receivedAt` não deve vir do sensor. Ele deve ser definido pelo sistema no momento em que a medição for persistida.
 
+Os campos `temperatureUnit` e `humidityUnit` devem vir do sensor ou simulador no contrato inicial. O sistema deve persistir a unidade recebida junto do valor medido. Conversões de unidade podem ser adicionadas posteriormente, sem alterar o significado original da medição armazenada.
+
 ## Entidades iniciais
+
+### User
+
+Representa o usuário dono dos dispositivos cadastrados.
+
+Campos esperados:
+
+- `uuid`
+- `name`
+- `email`
+- `createdAt`
+- `updatedAt`
+
+Relacionamentos:
+
+- Um usuário pode possuir vários ambientes.
+- Um usuário pode possuir vários dispositivos.
+- Um dispositivo deve estar associado a um usuário.
 
 ### Device
 
@@ -101,15 +125,18 @@ Representa o sensor físico ou simulado.
 Campos esperados:
 
 - `uuid`
+- `userUuid`
 - `name`
-- `environmentId`
+- `environmentUuid`
 - `lastSeenAt`
 - `createdAt`
 - `updatedAt`
 
 Relacionamentos:
 
+- Um dispositivo deve estar associado a um usuário.
 - Um dispositivo pode estar associado a no máximo um ambiente.
+- Um dispositivo pode não estar associado a nenhum ambiente.
 - Um dispositivo pode possuir várias medições.
 
 ### Environment
@@ -118,14 +145,17 @@ Representa um ambiente monitorado, como quarto, sala, escritório ou laboratóri
 
 Campos esperados:
 
-- `id`
+- `uuid`
+- `userUuid`
 - `name`
 - `createdAt`
 - `updatedAt`
 
 Relacionamentos:
 
+- Um ambiente deve estar associado a um usuário.
 - Um ambiente pode possuir vários dispositivos.
+- Um ambiente pode não possuir dispositivos.
 
 ### Measurement
 
@@ -133,10 +163,12 @@ Representa uma leitura recebida de um sensor físico ou simulado.
 
 Campos esperados:
 
-- `id`
+- `uuid`
 - `deviceUuid`
 - `temperature`
+- `temperatureUnit`
 - `humidity`
+- `humidityUnit`
 - `measuredAt`
 - `receivedAt`
 
@@ -146,11 +178,19 @@ Relacionamentos:
 
 ## Regras iniciais
 
+- UUID de usuário deve ser único.
 - UUID de dispositivo deve ser único.
+- Um dispositivo deve pertencer a um usuário.
+- Um ambiente deve pertencer a um usuário.
 - Um dispositivo pode estar associado a no máximo um ambiente por vez.
+- Associação de dispositivo a ambiente é opcional.
+- Quando um dispositivo estiver associado a um ambiente, ambos devem pertencer ao mesmo usuário.
 - Uma medição deve estar vinculada a um UUID de dispositivo.
 - Temperatura e umidade devem ser numéricas.
 - Umidade deve representar percentual.
+- Temperatura deve armazenar a unidade de medida informada pelo sensor, inicialmente `CELSIUS`.
+- Umidade deve armazenar a unidade de medida informada pelo sensor, inicialmente `RELATIVE_PERCENT`.
+- Conversões futuras devem preservar o valor e a unidade originais da medição recebida.
 - O sistema deve diferenciar timestamp informado pelo sensor de timestamp de recebimento.
 - Um dispositivo sem medições recentes deve poder ser exibido como desatualizado.
 - Toda aplicação criada deve ter execução prevista no Docker Compose.
