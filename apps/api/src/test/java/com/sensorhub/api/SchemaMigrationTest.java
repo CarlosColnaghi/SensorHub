@@ -106,6 +106,27 @@ class SchemaMigrationTest extends AbstractPostgresIntegrationTest {
     }
 
     @Test
+    void flywaySeedsAdminUserAndInitialDevice() {
+        UUID adminUuid = jdbc.queryForObject("""
+                SELECT uuid
+                FROM users
+                WHERE email = 'admin@sensorhub.com'
+                  AND name = 'admin'
+                """, UUID.class);
+
+        UUID deviceUserUuid = jdbc.queryForObject("""
+                SELECT user_uuid
+                FROM devices
+                WHERE hardware_uuid = 'b0fee3a6-ae91-4265-9365-36f793f32f06'::uuid
+                  AND name = 'Admin seed sensor'
+                  AND environment_uuid IS NULL
+                """, UUID.class);
+
+        assertThat(adminUuid).isNotNull();
+        assertThat(deviceUserUuid).isEqualTo(adminUuid);
+    }
+
+    @Test
     void userEmailAndDeviceHardwareUuidAreUnique() {
         AppUser user = createUser("Grace Hopper", "grace@example.com");
         UUID hardwareUuid = UUID.randomUUID();
