@@ -31,5 +31,30 @@ services:
       postgres:
         condition: service_healthy
 
+  mock-sensor:
+    build:
+      context: ./apps/mock-sensor
+    container_name: sensorhub-mock-sensor
+    restart: on-failure
+    environment:
+      SENSORHUB_DB_HOST: postgres
+      SENSORHUB_DB_PORT: 5432
+      SENSORHUB_DB_NAME: sensorhub
+      SENSORHUB_DB_USER: sensorhub
+      SENSORHUB_DB_PASSWORD: sensorhub
+      SENSORHUB_HARDWARE_UUIDS: b0fee3a6-ae91-4265-9365-36f793f32f06
+      SENSORHUB_MEASUREMENT_INTERVAL_SECONDS: 5
+      SENSORHUB_TEMPERATURE_MIN: 18.0
+      SENSORHUB_TEMPERATURE_MAX: 32.0
+      SENSORHUB_TEMPERATURE_STEP_MAX: 0.4
+      SENSORHUB_HUMIDITY_MIN: 35.0
+      SENSORHUB_HUMIDITY_MAX: 80.0
+      SENSORHUB_HUMIDITY_STEP_MAX: 1.5
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_started
+
 volumes:
   postgres_data:

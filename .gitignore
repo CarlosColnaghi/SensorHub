@@ -3,4 +3,6 @@
 target/
 apps/**/target/
 apps/**/.m2/
+__pycache__/
+*.py[cod]
 *.iml

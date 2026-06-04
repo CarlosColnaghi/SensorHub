@@ -4,13 +4,11 @@ Esta pasta guarda as especificações que orientam o desenvolvimento do SensorHu
 
 Use specs para transformar ideias em trabalho implementável. Cada spec deve ser curta, objetiva e verificável.
 
-## Specs iniciais recomendadas
+## Specs atuais
 
 - `001-product-overview.md`: visão geral do produto e escopo inicial.
-- `002-domain-model.md`: entidades principais e regras de negócio.
-- `003-mqtt-telemetry.md`: tópicos, payloads e validações MQTT.
-- `004-api-contract.md`: endpoints e contratos da API.
-- `005-mobile-app.md`: fluxos principais do app Flutter.
+- `002-api.md`: domínio, persistência, migrations e contratos iniciais da API.
+- `003-mock-sensor.md`: script Python para gerar medições simuladas no PostgreSQL.
 
 ## Template
 
