@@ -2,6 +2,8 @@ package com.sensorhub.api.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
@@ -32,6 +34,10 @@ public class Device {
 
     @Column(name = "environment_uuid")
     private UUID environmentUuid;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 32)
+    private DeviceStatus status;
 
     @Column(name = "last_seen_at")
     private Instant lastSeenAt;
@@ -78,6 +84,14 @@ public class Device {
         this.environmentUuid = environmentUuid;
     }
 
+    public DeviceStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(DeviceStatus status) {
+        this.status = status;
+    }
+
     public Instant getLastSeenAt() {
         return lastSeenAt;
     }
@@ -97,6 +111,9 @@ public class Device {
     @PrePersist
     void prePersist() {
         Instant now = Instant.now();
+        if (status == null) {
+            status = DeviceStatus.ACTIVATED;
+        }
         createdAt = now;
         updatedAt = now;
     }

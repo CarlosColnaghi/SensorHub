@@ -60,6 +60,7 @@ class ApiEndpointTest extends AbstractPostgresIntegrationTest {
         assertThat(device).isNotNull();
         assertThat(device.get("uuid")).isNotNull();
         assertThat(device.get("hardwareUuid")).isEqualTo(hardwareUuid.toString());
+        assertThat(device.get("status")).isEqualTo("ACTIVATED");
 
         ResponseEntity<Map> getResponse = rest.getForEntity("/api/v1/devices/" + device.get("uuid"), Map.class);
         assertThat(getResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -72,11 +73,16 @@ class ApiEndpointTest extends AbstractPostgresIntegrationTest {
         ResponseEntity<Map> updateResponse = rest.exchange(
                 "/api/v1/devices/" + device.get("uuid"),
                 HttpMethod.PUT,
-                new HttpEntity<>(Map.of("environmentUuid", environment.get("uuid"), "name", "Updated sensor")),
+                new HttpEntity<>(Map.of(
+                        "environmentUuid", environment.get("uuid"),
+                        "status", "INACTIVATED",
+                        "name", "Updated sensor"
+                )),
                 Map.class
         );
         assertThat(updateResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(updateResponse.getBody()).containsEntry("name", "Updated sensor");
+        assertThat(updateResponse.getBody()).containsEntry("status", "INACTIVATED");
 
         ResponseEntity<Void> deleteResponse = rest.exchange(
                 "/api/v1/devices/" + device.get("uuid"),
@@ -334,6 +340,14 @@ class ApiEndpointTest extends AbstractPostgresIntegrationTest {
                 Map.class
         );
         assertThat(invalidTimeField.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+
+        ResponseEntity<Map> invalidDeviceStatus = rest.exchange(
+                "/api/v1/devices/" + device.get("uuid"),
+                HttpMethod.PUT,
+                new HttpEntity<>(Map.of("status", "BROKEN", "name", "Invalid status")),
+                Map.class
+        );
+        assertThat(invalidDeviceStatus.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
 
         ResponseEntity<Map> missingRequiredField = rest.postForEntity("/api/v1/users", Map.of(
                 "name", "Missing Email"

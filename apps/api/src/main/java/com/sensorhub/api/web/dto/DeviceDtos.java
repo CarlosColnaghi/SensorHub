@@ -1,6 +1,7 @@
 package com.sensorhub.api.web.dto;
 
 import com.sensorhub.api.domain.Device;
+import com.sensorhub.api.domain.DeviceStatus;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
@@ -15,12 +16,14 @@ public final class DeviceDtos {
             @NotNull UUID hardwareUuid,
             @NotNull UUID userUuid,
             UUID environmentUuid,
+            DeviceStatus status,
             @Size(max = 120) String name
     ) {
     }
 
     public record UpdateDeviceRequest(
             UUID environmentUuid,
+            DeviceStatus status,
             @Size(max = 120) String name
     ) {
     }
@@ -30,6 +33,7 @@ public final class DeviceDtos {
             UUID hardwareUuid,
             UUID userUuid,
             UUID environmentUuid,
+            DeviceStatus status,
             String name,
             Instant lastSeenAt,
             Instant createdAt,
@@ -41,6 +45,7 @@ public final class DeviceDtos {
                     device.getHardwareUuid(),
                     device.getUserUuid(),
                     device.getEnvironmentUuid(),
+                    device.getStatus(),
                     device.getName(),
                     device.getLastSeenAt(),
                     device.getCreatedAt(),

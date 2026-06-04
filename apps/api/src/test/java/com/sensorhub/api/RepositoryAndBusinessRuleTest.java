@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.sensorhub.api.domain.AppUser;
 import com.sensorhub.api.domain.Device;
+import com.sensorhub.api.domain.DeviceStatus;
 import com.sensorhub.api.domain.Measurement;
 import com.sensorhub.api.domain.SensorEnvironment;
 import com.sensorhub.api.repository.DeviceRepository;
@@ -52,6 +53,7 @@ class RepositoryAndBusinessRuleTest extends AbstractPostgresIntegrationTest {
                 assertThat(found.getEnvironmentUuid()).isNull());
         assertThat(devices.findById(deviceWithEnvironment.getUuid())).hasValueSatisfying(found ->
                 assertThat(found.getEnvironmentUuid()).isEqualTo(environment.getUuid()));
+        assertThat(deviceWithEnvironment.getStatus()).isEqualTo(DeviceStatus.ACTIVATED);
         assertThat(measurements.findById(measurement.getUuid())).hasValueSatisfying(found ->
                 assertThat(found.getDeviceUuid()).isEqualTo(deviceWithEnvironment.getUuid()));
     }

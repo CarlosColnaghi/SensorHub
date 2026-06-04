@@ -1,6 +1,7 @@
 package com.sensorhub.api.service;
 
 import com.sensorhub.api.domain.Device;
+import com.sensorhub.api.domain.DeviceStatus;
 import com.sensorhub.api.domain.SensorEnvironment;
 import com.sensorhub.api.repository.DeviceRepository;
 import com.sensorhub.api.repository.EnvironmentRepository;
@@ -39,6 +40,7 @@ public class DeviceService {
         device.setHardwareUuid(request.hardwareUuid());
         device.setUserUuid(request.userUuid());
         device.setEnvironmentUuid(request.environmentUuid());
+        device.setStatus(request.status() == null ? DeviceStatus.ACTIVATED : request.status());
         device.setName(request.name());
         return devices.save(device);
     }
@@ -58,6 +60,9 @@ public class DeviceService {
         Device device = get(uuid);
         validateEnvironmentOwnership(request.environmentUuid(), device.getUserUuid());
         device.setEnvironmentUuid(request.environmentUuid());
+        if (request.status() != null) {
+            device.setStatus(request.status());
+        }
         device.setName(request.name());
         return device;
     }

@@ -23,10 +23,12 @@ CREATE TABLE devices (
     hardware_uuid UUID NOT NULL,
     name VARCHAR(120),
     environment_uuid UUID,
+    status VARCHAR(32) NOT NULL DEFAULT 'ACTIVATED',
     last_seen_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT uk_devices_hardware_uuid UNIQUE (hardware_uuid),
+    CONSTRAINT ck_devices_status CHECK (status IN ('ACTIVATED', 'INACTIVATED')),
     CONSTRAINT fk_devices_user FOREIGN KEY (user_uuid) REFERENCES users (uuid) ON DELETE CASCADE,
     CONSTRAINT fk_devices_environment FOREIGN KEY (environment_uuid) REFERENCES environments (uuid) ON DELETE SET NULL,
     CONSTRAINT fk_devices_environment_same_user FOREIGN KEY (environment_uuid, user_uuid) REFERENCES environments (uuid, user_uuid) ON DELETE SET NULL (environment_uuid)

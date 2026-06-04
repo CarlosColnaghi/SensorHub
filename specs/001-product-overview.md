@@ -129,6 +129,7 @@ Campos esperados:
 - `userUuid`
 - `name`
 - `environmentUuid`
+- `status`
 - `lastSeenAt`
 - `createdAt`
 - `updatedAt`
@@ -141,6 +142,8 @@ Relacionamentos:
 - Um dispositivo pode possuir várias medições.
 - O `uuid` do dispositivo é o identificador interno do registro no sistema.
 - O `hardwareUuid` é o identificador físico informado pelo firmware ou simulador.
+- O `status` inicial do dispositivo deve ser `ACTIVATED`.
+- Status aceitos inicialmente: `ACTIVATED` e `INACTIVATED`.
 
 ### Environment
 
@@ -185,6 +188,8 @@ Relacionamentos:
 - UUID de dispositivo deve ser único e gerado pelo banco como chave primária.
 - `hardwareUuid` de dispositivo deve ser único e obrigatório.
 - O cadastro de um dispositivo deve receber o `hardwareUuid` vindo do firmware ou simulador.
+- O status de dispositivo deve aceitar inicialmente apenas `ACTIVATED` e `INACTIVATED`.
+- Dispositivos criados sem status explícito devem iniciar como `ACTIVATED`.
 - Um dispositivo deve pertencer a um usuário.
 - Um ambiente deve pertencer a um usuário.
 - Um dispositivo pode estar associado a no máximo um ambiente por vez.
