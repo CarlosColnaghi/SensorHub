@@ -2,6 +2,7 @@ package com.sensorhub.api.web;
 
 import com.sensorhub.api.domain.Measurement;
 import com.sensorhub.api.service.MeasurementService;
+import com.sensorhub.api.web.dto.MeasurementDtos.MeasurementOverviewResponse;
 import com.sensorhub.api.web.dto.MeasurementDtos.MeasurementResponse;
 import com.sensorhub.api.web.dto.MeasurementDtos.PageResponse;
 import java.time.Instant;
@@ -61,5 +62,15 @@ public class MeasurementController {
             return ResponseEntity.noContent().build();
         }
         return ResponseEntity.ok(MeasurementResponse.from(latest));
+    }
+
+    @GetMapping("/devices/{deviceUuid}/measurements/overview")
+    public MeasurementOverviewResponse overviewByDevice(
+            @PathVariable UUID deviceUuid,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
+            @RequestParam(defaultValue = "raw") String bucket
+    ) {
+        return measurements.overviewByDevice(deviceUuid, from, to, bucket);
     }
 }

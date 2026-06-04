@@ -299,6 +299,77 @@ class ApiEndpointTest extends AbstractPostgresIntegrationTest {
     }
 
     @Test
+    void mobileDashboardAndMeasurementOverviewContractsWork() {
+        Map<?, ?> user = createUser("Mobile User", uniqueEmail("mobile-user"));
+        ResponseEntity<Map> environmentResponse = rest.postForEntity("/api/v1/environments", Map.of(
+                "userUuid", user.get("uuid"),
+                "name", "Greenhouse"
+        ), Map.class);
+        assertThat(environmentResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+        Map<?, ?> device = createDevice((String) user.get("uuid"), (String) environmentResponse.getBody().get("uuid"));
+        Map<?, ?> emptyDevice = createDevice((String) user.get("uuid"), null);
+        UUID deviceUuid = UUID.fromString((String) device.get("uuid"));
+        UUID emptyDeviceUuid = UUID.fromString((String) emptyDevice.get("uuid"));
+        Instant now = Instant.now();
+        Instant from = now.minus(Duration.ofMinutes(20));
+        Instant to = now.plus(Duration.ofMinutes(1));
+
+        createMeasurement(deviceUuid, now.minus(Duration.ofMinutes(15)), now.minus(Duration.ofMinutes(15)), "20.00", "50.00");
+        createMeasurement(deviceUuid, now.minus(Duration.ofMinutes(10)), now.minus(Duration.ofMinutes(10)), "25.00", "60.00");
+        createMeasurement(deviceUuid, now.minus(Duration.ofMinutes(5)), now.minus(Duration.ofMinutes(5)), "22.00", "40.00");
+        devices.findById(deviceUuid).ifPresent(savedDevice -> {
+            savedDevice.setLastSeenAt(now);
+            devices.saveAndFlush(savedDevice);
+        });
+
+        ResponseEntity<List> dashboardDevicesResponse = rest.getForEntity(
+                "/api/v1/users/" + user.get("uuid") + "/dashboard/devices",
+                List.class
+        );
+        assertThat(dashboardDevicesResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(dashboardDevicesResponse.getBody()).hasSize(2);
+        Map<?, ?> dashboardDevice = findByDeviceUuid(dashboardDevicesResponse.getBody(), deviceUuid);
+        assertThat(dashboardDevice.get("environmentName")).isEqualTo("Greenhouse");
+        assertThat(dashboardDevice.get("deviceStatus")).isEqualTo("ACTIVATED");
+        assertThat(dashboardDevice.containsKey("latestMeasurement")).isFalse();
+        assertThat(dashboardDevice.containsKey("freshnessStatus")).isFalse();
+
+        ResponseEntity<List> latestDashboardResponse = rest.getForEntity(
+                "/api/v1/users/" + user.get("uuid") + "/dashboard/measurements/latest",
+                List.class
+        );
+        assertThat(latestDashboardResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+        Map<?, ?> latestDevice = findByDeviceUuid(latestDashboardResponse.getBody(), deviceUuid);
+        assertThat(latestDevice.get("freshnessStatus")).isEqualTo("ONLINE");
+        assertThat(latestDevice.get("latestMeasurement")).isInstanceOf(Map.class);
+        Map<?, ?> latestEmptyDevice = findByDeviceUuid(latestDashboardResponse.getBody(), emptyDeviceUuid);
+        assertThat(latestEmptyDevice.get("freshnessStatus")).isEqualTo("NO_DATA");
+        assertThat(latestEmptyDevice.get("latestMeasurement")).isNull();
+
+        ResponseEntity<Map> overviewResponse = rest.getForEntity(
+                "/api/v1/devices/" + deviceUuid
+                        + "/measurements/overview?from=" + from
+                        + "&to=" + to
+                        + "&bucket=5m",
+                Map.class
+        );
+        assertThat(overviewResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+        Map<?, ?> overview = overviewResponse.getBody();
+        assertThat(overview).isNotNull();
+        assertThat(overview.get("deviceUuid")).isEqualTo(deviceUuid.toString());
+        assertThat((List<?>) overview.get("series")).hasSize(3);
+        Map<?, ?> overviewStats = (Map<?, ?>) overview.get("overview");
+        assertThat(((Number) overviewStats.get("measurementCount")).longValue()).isEqualTo(3);
+        assertThat(((Number) overviewStats.get("temperatureMax")).doubleValue()).isEqualTo(25.0);
+        assertThat(((Number) overviewStats.get("temperatureMin")).doubleValue()).isEqualTo(20.0);
+        assertThat(((Number) overviewStats.get("temperatureAverage")).doubleValue()).isEqualTo(22.33);
+        assertThat(((Number) overviewStats.get("humidityMax")).doubleValue()).isEqualTo(60.0);
+        assertThat(((Number) overviewStats.get("humidityMin")).doubleValue()).isEqualTo(40.0);
+        assertThat(((Number) overviewStats.get("humidityAverage")).doubleValue()).isEqualTo(50.0);
+    }
+
+    @Test
     void internalMeasurementRecordingSetsReceivedAtAndDeviceLastSeenAt() {
         Map<?, ?> user = createUser("Ingest User", "ingest@example.com");
         Map<?, ?> device = createDevice((String) user.get("uuid"), null);
@@ -365,6 +436,13 @@ class ApiEndpointTest extends AbstractPostgresIntegrationTest {
                 Map.class
         );
         assertThat(missingDeviceMeasurements.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+
+        ResponseEntity<Map> invalidBucket = rest.getForEntity(
+                "/api/v1/devices/" + device.get("uuid")
+                        + "/measurements/overview?from=2026-06-01T00:00:00Z&to=2026-06-02T00:00:00Z&bucket=2m",
+                Map.class
+        );
+        assertThat(invalidBucket.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
     private Map<?, ?> createUser(String name, String email) {
@@ -395,15 +473,33 @@ class ApiEndpointTest extends AbstractPostgresIntegrationTest {
     }
 
     private Measurement createMeasurement(UUID deviceUuid, Instant measuredAt, Instant receivedAt, String temperature) {
+        return createMeasurement(deviceUuid, measuredAt, receivedAt, temperature, "55.00");
+    }
+
+    private Measurement createMeasurement(
+            UUID deviceUuid,
+            Instant measuredAt,
+            Instant receivedAt,
+            String temperature,
+            String humidity
+    ) {
         Measurement measurement = new Measurement();
         measurement.setDeviceUuid(deviceUuid);
         measurement.setTemperature(new BigDecimal(temperature));
         measurement.setTemperatureUnit("CELSIUS");
-        measurement.setHumidity(new BigDecimal("55.00"));
+        measurement.setHumidity(new BigDecimal(humidity));
         measurement.setHumidityUnit("RELATIVE_PERCENT");
         measurement.setMeasuredAt(measuredAt);
         measurement.setReceivedAt(receivedAt);
         return measurements.saveAndFlush(measurement);
+    }
+
+    private Map<?, ?> findByDeviceUuid(List<?> items, UUID deviceUuid) {
+        return items.stream()
+                .map(item -> (Map<?, ?>) item)
+                .filter(item -> deviceUuid.toString().equals(item.get("deviceUuid")))
+                .findFirst()
+                .orElseThrow();
     }
 
     private String uniqueEmail(String prefix) {

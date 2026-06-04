@@ -2,6 +2,7 @@ package com.sensorhub.api.repository;
 
 import com.sensorhub.api.domain.Measurement;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -25,4 +26,6 @@ public interface MeasurementRepository extends JpaRepository<Measurement, UUID> 
     Page<Measurement> findByDeviceUuidAndReceivedAtBetween(UUID deviceUuid, Instant from, Instant to, Pageable pageable);
 
     Optional<Measurement> findFirstByDeviceUuidOrderByMeasuredAtDesc(UUID deviceUuid);
+
+    List<Measurement> findByDeviceUuidAndMeasuredAtBetweenOrderByMeasuredAtAsc(UUID deviceUuid, Instant from, Instant to);
 }
