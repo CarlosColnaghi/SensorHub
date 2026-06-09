@@ -7,7 +7,7 @@ import '../theme/app_theme.dart';
 
 enum ChartMetric { temperature, humidity }
 
-class MeasurementChart extends StatelessWidget {
+class MeasurementChart extends StatefulWidget {
   const MeasurementChart({
     required this.points,
     required this.metric,
@@ -18,12 +18,21 @@ class MeasurementChart extends StatelessWidget {
   final ChartMetric metric;
 
   @override
+  State<MeasurementChart> createState() => _MeasurementChartState();
+}
+
+class _MeasurementChartState extends State<MeasurementChart> {
+  int? _selectedIndex;
+
+  @override
   Widget build(BuildContext context) {
-    final color = metric == ChartMetric.temperature
+    final color = widget.metric == ChartMetric.temperature
         ? AppColors.temperature
         : AppColors.humidity;
-    final title = metric == ChartMetric.temperature ? 'Temperatura' : 'Umidade';
-    final unit = metric == ChartMetric.temperature ? '°C' : '%';
+    final title = widget.metric == ChartMetric.temperature
+        ? 'Temperatura'
+        : 'Umidade';
+    final unit = widget.metric == ChartMetric.temperature ? '°C' : '%';
 
     return Card(
       child: Padding(
@@ -34,7 +43,7 @@ class MeasurementChart extends StatelessWidget {
             Row(
               children: [
                 Icon(
-                  metric == ChartMetric.temperature
+                  widget.metric == ChartMetric.temperature
                       ? Icons.thermostat
                       : Icons.water_drop,
                   color: color,
@@ -47,15 +56,45 @@ class MeasurementChart extends StatelessWidget {
             SizedBox(
               height: 180,
               width: double.infinity,
-              child: points.isEmpty
+              child: widget.points.isEmpty
                   ? const Center(child: Text('Sem dados no período'))
-                  : CustomPaint(
-                      painter: _LineChartPainter(
-                        points: points,
-                        metric: metric,
-                        color: color,
-                        unit: unit,
-                      ),
+                  : LayoutBuilder(
+                      builder: (context, constraints) {
+                        return GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTapDown: (details) => _selectNearestPoint(
+                            details.localPosition,
+                            constraints.biggest,
+                          ),
+                          onPanDown: (details) => _selectNearestPoint(
+                            details.localPosition,
+                            constraints.biggest,
+                          ),
+                          onPanUpdate: (details) => _selectNearestPoint(
+                            details.localPosition,
+                            constraints.biggest,
+                          ),
+                          onLongPressStart: (details) => _selectNearestPoint(
+                            details.localPosition,
+                            constraints.biggest,
+                          ),
+                          onLongPressMoveUpdate: (details) =>
+                              _selectNearestPoint(
+                                details.localPosition,
+                                constraints.biggest,
+                              ),
+                          child: CustomPaint(
+                            painter: _LineChartPainter(
+                              points: widget.points,
+                              metric: widget.metric,
+                              color: color,
+                              unit: unit,
+                              selectedIndex: _selectedIndex,
+                            ),
+                            size: constraints.biggest,
+                          ),
+                        );
+                      },
                     ),
             ),
           ],
@@ -63,6 +102,43 @@ class MeasurementChart extends StatelessWidget {
       ),
     );
   }
+
+  void _selectNearestPoint(Offset position, Size size) {
+    if (widget.points.isEmpty) {
+      return;
+    }
+
+    final chart = _chartRect(size);
+    final x = position.dx.clamp(chart.left, chart.right);
+    final minTime = widget.points.first.timestamp.millisecondsSinceEpoch;
+    final maxTime = widget.points.last.timestamp.millisecondsSinceEpoch;
+    final timeRange = math.max(maxTime - minTime, 1);
+
+    var selectedIndex = 0;
+    var smallestDistance = double.infinity;
+    for (var i = 0; i < widget.points.length; i++) {
+      final pointX =
+          chart.left +
+          ((widget.points[i].timestamp.millisecondsSinceEpoch - minTime) /
+                  timeRange) *
+              chart.width;
+      final distance = (pointX - x).abs();
+      if (distance < smallestDistance) {
+        smallestDistance = distance;
+        selectedIndex = i;
+      }
+    }
+
+    setState(() => _selectedIndex = selectedIndex);
+  }
+}
+
+Rect _chartRect(Size size) {
+  const left = 42.0;
+  const right = 12.0;
+  const top = 26.0;
+  const bottom = 30.0;
+  return Rect.fromLTRB(left, top, size.width - right, size.height - bottom);
 }
 
 class _LineChartPainter extends CustomPainter {
@@ -71,25 +147,18 @@ class _LineChartPainter extends CustomPainter {
     required this.metric,
     required this.color,
     required this.unit,
+    required this.selectedIndex,
   });
 
   final List<SeriesPoint> points;
   final ChartMetric metric;
   final Color color;
   final String unit;
+  final int? selectedIndex;
 
   @override
   void paint(Canvas canvas, Size size) {
-    const left = 42.0;
-    const right = 12.0;
-    const top = 14.0;
-    const bottom = 30.0;
-    final chart = Rect.fromLTRB(
-      left,
-      top,
-      size.width - right,
-      size.height - bottom,
-    );
+    final chart = _chartRect(size);
     final values = points.map(_value).toList();
     final minValue = values.reduce(math.min);
     final maxValue = values.reduce(math.max);
@@ -118,16 +187,18 @@ class _LineChartPainter extends CustomPainter {
     final path = Path();
     for (var i = 0; i < points.length; i++) {
       final point = points[i];
-      final x =
-          chart.left +
-          ((point.timestamp.millisecondsSinceEpoch - minTime) / timeRange) *
-              chart.width;
-      final y =
-          chart.bottom - ((_value(point) - minValue) / range) * chart.height;
+      final offset = _pointOffset(
+        point,
+        chart,
+        minTime,
+        timeRange,
+        minValue,
+        range,
+      );
       if (i == 0) {
-        path.moveTo(x, y);
+        path.moveTo(offset.dx, offset.dy);
       } else {
-        path.lineTo(x, y);
+        path.lineTo(offset.dx, offset.dy);
       }
     }
 
@@ -163,11 +234,26 @@ class _LineChartPainter extends CustomPainter {
       Offset(chart.right - 38, chart.bottom + 8),
       axisText,
     );
+
+    final index = selectedIndex;
+    if (index != null && index >= 0 && index < points.length) {
+      _drawSelection(
+        canvas,
+        chart,
+        points[index],
+        minTime,
+        timeRange,
+        minValue,
+        range,
+      );
+    }
   }
 
   @override
   bool shouldRepaint(covariant _LineChartPainter oldDelegate) {
-    return oldDelegate.points != points || oldDelegate.metric != metric;
+    return oldDelegate.points != points ||
+        oldDelegate.metric != metric ||
+        oldDelegate.selectedIndex != selectedIndex;
   }
 
   double _value(SeriesPoint point) {
@@ -180,6 +266,92 @@ class _LineChartPainter extends CustomPainter {
     final hour = value.hour.toString().padLeft(2, '0');
     final minute = value.minute.toString().padLeft(2, '0');
     return '$hour:$minute';
+  }
+
+  Offset _pointOffset(
+    SeriesPoint point,
+    Rect chart,
+    int minTime,
+    int timeRange,
+    double minValue,
+    double range,
+  ) {
+    final x =
+        chart.left +
+        ((point.timestamp.millisecondsSinceEpoch - minTime) / timeRange) *
+            chart.width;
+    final y =
+        chart.bottom - ((_value(point) - minValue) / range) * chart.height;
+    return Offset(x, y);
+  }
+
+  void _drawSelection(
+    Canvas canvas,
+    Rect chart,
+    SeriesPoint point,
+    int minTime,
+    int timeRange,
+    double minValue,
+    double range,
+  ) {
+    final offset = _pointOffset(
+      point,
+      chart,
+      minTime,
+      timeRange,
+      minValue,
+      range,
+    );
+    final guidePaint = Paint()
+      ..color = AppColors.textMuted.withValues(alpha: 0.5)
+      ..strokeWidth = 1;
+    canvas.drawLine(
+      Offset(offset.dx, chart.top),
+      Offset(offset.dx, chart.bottom),
+      guidePaint,
+    );
+
+    final markerPaint = Paint()..color = color;
+    final markerBorderPaint = Paint()..color = AppColors.background;
+    canvas.drawCircle(offset, 6, markerBorderPaint);
+    canvas.drawCircle(offset, 4, markerPaint);
+
+    final label =
+        '${_value(point).toStringAsFixed(2)} $unit  ${_timeLabel(point.timestamp)}';
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: const TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    const padding = EdgeInsets.symmetric(horizontal: 8, vertical: 5);
+    final tooltipWidth = textPainter.width + padding.horizontal;
+    final tooltipHeight = textPainter.height + padding.vertical;
+    final left = (offset.dx - tooltipWidth / 2).clamp(
+      chart.left,
+      chart.right - tooltipWidth,
+    );
+    final top = offset.dy - tooltipHeight - 10 < chart.top
+        ? offset.dy + 10
+        : offset.dy - tooltipHeight - 10;
+    final tooltipRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(left, top, tooltipWidth, tooltipHeight),
+      const Radius.circular(6),
+    );
+    final tooltipPaint = Paint()..color = AppColors.surfaceAlt;
+    final tooltipBorderPaint = Paint()
+      ..color = color.withValues(alpha: 0.7)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    canvas.drawRRect(tooltipRect, tooltipPaint);
+    canvas.drawRRect(tooltipRect, tooltipBorderPaint);
+    textPainter.paint(canvas, Offset(left + padding.left, top + padding.top));
   }
 
   void _drawText(Canvas canvas, String text, Offset offset, TextStyle style) {

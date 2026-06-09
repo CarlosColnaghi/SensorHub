@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sensorhub_mobile/main.dart';
 import 'package:sensorhub_mobile/src/api/sensorhub_repository.dart';
 import 'package:sensorhub_mobile/src/models/sensorhub_models.dart';
+import 'package:sensorhub_mobile/src/widgets/measurement_chart.dart';
 
 void main() {
   testWidgets('renders dashboard card and opens measurement overview', (
@@ -33,6 +34,10 @@ void main() {
 
     expect(find.text('Temperatura'), findsWidgets);
     expect(find.text('Umidade'), findsWidgets);
+    await tester.tap(find.byType(MeasurementChart).first);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
     await tester.drag(find.byType(Scrollable).last, const Offset(0, -900));
     await tester.pumpAndSettle();
 

@@ -242,6 +242,8 @@ Metadados estáveis do sensor devem vir de `GET /api/v1/devices/{deviceUuid}` ou
 
 Na tela de detalhe, `latestMeasurement` representa a leitura atual do dispositivo. `series` e `overview` representam o período selecionado pelo usuário.
 
+Os gráficos da tela de detalhe devem permitir interação por toque ou arraste. Ao selecionar um ponto da linha, o app deve destacar o ponto mais próximo e exibir valor e horário correspondentes.
+
 O app não deve usar `GET /api/v1/devices/{deviceUuid}/measurements` para montar gráficos ou calcular overview. Esse endpoint paginado retorna medições brutas e deve ficar reservado para uma futura tela de histórico tabular, exportação ou depuração.
 
 Exemplo de resposta esperada para o overview de medições:
@@ -335,6 +337,7 @@ Exemplo de resposta esperada para o overview de medições:
 - A tela inicial atualiza os cards periodicamente.
 - O app navega do card para o detalhe do sensor.
 - A tela de detalhe exibe leitura atual, gráfico de temperatura, gráfico de umidade e overview vindos da API.
+- A tela de detalhe permite tocar ou arrastar nos gráficos para ver valor e horário do ponto selecionado.
 - O app possui menu para início, dispositivos, ambientes e perfil.
 - O app permite cadastrar dispositivo por `hardwareUuid`.
 - O app permite abrir um dispositivo cadastrado e editar seus dados.
@@ -366,6 +369,7 @@ Exemplo de resposta esperada para o overview de medições:
 - Testar card de sensor offline.
 - Testar navegação do card para tela de detalhe.
 - Testar renderização da tela de detalhe com gráficos e overview.
+- Testar interação nos gráficos da tela de detalhe.
 - Testar estados de carregamento, vazio e erro.
 
 ### Formulários
