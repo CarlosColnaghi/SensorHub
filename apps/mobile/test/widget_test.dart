@@ -77,6 +77,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Dispositivos'));
     await tester.pumpAndSettle();
+    expect(find.text('Ativo'), findsOneWidget);
     await tester.tap(find.text('Sensor da sala'));
     await tester.pumpAndSettle();
 

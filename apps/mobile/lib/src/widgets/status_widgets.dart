@@ -11,6 +11,7 @@ class StatusPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = switch (status) {
       'ONLINE' => AppColors.success,
+      'ACTIVATED' => AppColors.success,
       'OFFLINE' => AppColors.warning,
       'NO_DATA' => AppColors.noData,
       'INACTIVATED' => AppColors.danger,
@@ -18,6 +19,7 @@ class StatusPill extends StatelessWidget {
     };
     final label = switch (status) {
       'ONLINE' => 'Online',
+      'ACTIVATED' => 'Ativo',
       'OFFLINE' => 'Offline',
       'NO_DATA' => 'Sem dados',
       'INACTIVATED' => 'Inativo',

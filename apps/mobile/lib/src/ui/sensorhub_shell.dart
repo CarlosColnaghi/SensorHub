@@ -560,7 +560,7 @@ class DevicesScreen extends StatelessWidget {
                 trailing: StatusPill(
                   status: device.status == 'INACTIVATED'
                       ? 'INACTIVATED'
-                      : 'ONLINE',
+                      : 'ACTIVATED',
                 ),
               ),
             ),
