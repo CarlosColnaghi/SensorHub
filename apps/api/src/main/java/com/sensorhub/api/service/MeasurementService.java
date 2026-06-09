@@ -1,6 +1,7 @@
 package com.sensorhub.api.service;
 
 import com.sensorhub.api.domain.Device;
+import com.sensorhub.api.domain.DeviceStatus;
 import com.sensorhub.api.domain.Measurement;
 import com.sensorhub.api.repository.DeviceRepository;
 import com.sensorhub.api.repository.MeasurementRepository;
@@ -91,13 +92,14 @@ public class MeasurementService {
 
         Bucket parsedBucket = Bucket.parse(bucket);
         Measurement latest = measurements.findFirstByDeviceUuidOrderByMeasuredAtDesc(deviceUuid).orElse(null);
+        Measurement latestCommunication = measurements.findFirstByDeviceUuidOrderByReceivedAtDesc(deviceUuid).orElse(null);
         List<Measurement> periodMeasurements = measurements
                 .findByDeviceUuidAndMeasuredAtBetweenOrderByMeasuredAtAsc(deviceUuid, from, to);
 
         return new MeasurementOverviewResponse(
                 deviceUuid,
-                freshness.status(device, latest).name(),
-                device.getLastSeenAt(),
+                freshness.status(device, latestCommunication).name(),
+                lastSeenAt(latestCommunication),
                 new PeriodResponse(from, to, parsedBucket.value),
                 LatestMeasurementResponse.from(latest),
                 series(periodMeasurements, parsedBucket),
@@ -109,10 +111,15 @@ public class MeasurementService {
     public Measurement record(Measurement measurement) {
         Device device = devices.findById(measurement.getDeviceUuid())
                 .orElseThrow(() -> new ResourceNotFoundException("device not found"));
+        if (device.getStatus() == DeviceStatus.INACTIVATED) {
+            throw new InvalidRequestException("device is inactivated");
+        }
         measurement.setReceivedAt(Instant.now());
-        Measurement saved = measurements.save(measurement);
-        device.setLastSeenAt(saved.getReceivedAt());
-        return saved;
+        return measurements.save(measurement);
+    }
+
+    private Instant lastSeenAt(Measurement latestCommunication) {
+        return latestCommunication == null ? null : latestCommunication.getReceivedAt();
     }
 
     private Page<Measurement> byMeasuredAt(UUID deviceUuid, Instant from, Instant to, Pageable pageable) {

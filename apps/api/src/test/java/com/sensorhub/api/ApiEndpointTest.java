@@ -61,10 +61,12 @@ class ApiEndpointTest extends AbstractPostgresIntegrationTest {
         assertThat(device.get("uuid")).isNotNull();
         assertThat(device.get("hardwareUuid")).isEqualTo(hardwareUuid.toString());
         assertThat(device.get("status")).isEqualTo("ACTIVATED");
+        assertThat(device.containsKey("lastSeenAt")).isFalse();
 
         ResponseEntity<Map> getResponse = rest.getForEntity("/api/v1/devices/" + device.get("uuid"), Map.class);
         assertThat(getResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(getResponse.getBody()).containsEntry("uuid", device.get("uuid"));
+        assertThat(getResponse.getBody().containsKey("lastSeenAt")).isFalse();
 
         ResponseEntity<List> listResponse = rest.getForEntity("/api/v1/devices", List.class);
         assertThat(listResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -171,6 +173,67 @@ class ApiEndpointTest extends AbstractPostgresIntegrationTest {
                 Map.class
         );
         assertThat(deletedGetResponse.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void deletingDeviceRemovesRelatedMeasurements() {
+        Map<?, ?> user = createUser("Delete Device Cascade", uniqueEmail("delete-device-cascade"));
+        Map<?, ?> device = createDevice((String) user.get("uuid"), null);
+        UUID deviceUuid = UUID.fromString((String) device.get("uuid"));
+        createMeasurement(
+                deviceUuid,
+                Instant.parse("2026-06-01T10:00:00Z"),
+                Instant.parse("2026-06-01T10:00:00Z"),
+                "21.50"
+        );
+        assertThat(measurements.countByDeviceUuid(deviceUuid)).isEqualTo(1);
+
+        ResponseEntity<Void> deleteResponse = rest.exchange(
+                "/api/v1/devices/" + deviceUuid,
+                HttpMethod.DELETE,
+                HttpEntity.EMPTY,
+                Void.class
+        );
+
+        assertThat(deleteResponse.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(measurements.countByDeviceUuid(deviceUuid)).isZero();
+    }
+
+    @Test
+    void environmentWithLinkedDevicesCannotBeDeleted() {
+        Map<?, ?> user = createUser("Environment Delete Guard", uniqueEmail("environment-delete-guard"));
+        ResponseEntity<Map> environmentResponse = rest.postForEntity("/api/v1/environments", Map.of(
+                "userUuid", user.get("uuid"),
+                "name", "Protected Lab"
+        ), Map.class);
+        assertThat(environmentResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        Map<?, ?> environment = environmentResponse.getBody();
+        assertThat(environment).isNotNull();
+        Map<?, ?> device = createDevice((String) user.get("uuid"), (String) environment.get("uuid"));
+
+        ResponseEntity<Map> blockedDelete = rest.exchange(
+                "/api/v1/environments/" + environment.get("uuid"),
+                HttpMethod.DELETE,
+                HttpEntity.EMPTY,
+                Map.class
+        );
+        assertThat(blockedDelete.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+
+        ResponseEntity<Void> deviceDelete = rest.exchange(
+                "/api/v1/devices/" + device.get("uuid"),
+                HttpMethod.DELETE,
+                HttpEntity.EMPTY,
+                Void.class
+        );
+        assertThat(deviceDelete.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+
+        ResponseEntity<Void> environmentDelete = rest.exchange(
+                "/api/v1/environments/" + environment.get("uuid"),
+                HttpMethod.DELETE,
+                HttpEntity.EMPTY,
+                Void.class
+        );
+        assertThat(environmentDelete.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
     }
 
     @Test
@@ -317,11 +380,7 @@ class ApiEndpointTest extends AbstractPostgresIntegrationTest {
 
         createMeasurement(deviceUuid, now.minus(Duration.ofMinutes(15)), now.minus(Duration.ofMinutes(15)), "20.00", "50.00");
         createMeasurement(deviceUuid, now.minus(Duration.ofMinutes(10)), now.minus(Duration.ofMinutes(10)), "25.00", "60.00");
-        createMeasurement(deviceUuid, now.minus(Duration.ofMinutes(5)), now.minus(Duration.ofMinutes(5)), "22.00", "40.00");
-        devices.findById(deviceUuid).ifPresent(savedDevice -> {
-            savedDevice.setLastSeenAt(now);
-            devices.saveAndFlush(savedDevice);
-        });
+        createMeasurement(deviceUuid, now.minus(Duration.ofMinutes(5)), now, "22.00", "40.00");
 
         ResponseEntity<List> dashboardDevicesResponse = rest.getForEntity(
                 "/api/v1/users/" + user.get("uuid") + "/dashboard/devices",
@@ -343,8 +402,11 @@ class ApiEndpointTest extends AbstractPostgresIntegrationTest {
         Map<?, ?> latestDevice = findByDeviceUuid(latestDashboardResponse.getBody(), deviceUuid);
         assertThat(latestDevice.get("freshnessStatus")).isEqualTo("ONLINE");
         assertThat(latestDevice.get("latestMeasurement")).isInstanceOf(Map.class);
+        assertThat(Instant.parse((String) latestDevice.get("lastSeenAt")))
+                .isBetween(now.minusSeconds(1), now.plusSeconds(1));
         Map<?, ?> latestEmptyDevice = findByDeviceUuid(latestDashboardResponse.getBody(), emptyDeviceUuid);
         assertThat(latestEmptyDevice.get("freshnessStatus")).isEqualTo("NO_DATA");
+        assertThat(latestEmptyDevice.get("lastSeenAt")).isNull();
         assertThat(latestEmptyDevice.get("latestMeasurement")).isNull();
 
         ResponseEntity<Map> overviewResponse = rest.getForEntity(
@@ -358,6 +420,8 @@ class ApiEndpointTest extends AbstractPostgresIntegrationTest {
         Map<?, ?> overview = overviewResponse.getBody();
         assertThat(overview).isNotNull();
         assertThat(overview.get("deviceUuid")).isEqualTo(deviceUuid.toString());
+        assertThat(Instant.parse((String) overview.get("lastSeenAt")))
+                .isBetween(now.minusSeconds(1), now.plusSeconds(1));
         assertThat((List<?>) overview.get("series")).hasSize(3);
         Map<?, ?> overviewStats = (Map<?, ?>) overview.get("overview");
         assertThat(((Number) overviewStats.get("measurementCount")).longValue()).isEqualTo(3);
@@ -370,7 +434,7 @@ class ApiEndpointTest extends AbstractPostgresIntegrationTest {
     }
 
     @Test
-    void internalMeasurementRecordingSetsReceivedAtAndDeviceLastSeenAt() {
+    void internalMeasurementRecordingSetsReceivedAt() {
         Map<?, ?> user = createUser("Ingest User", "ingest@example.com");
         Map<?, ?> device = createDevice((String) user.get("uuid"), null);
         UUID deviceUuid = UUID.fromString((String) device.get("uuid"));
@@ -386,10 +450,10 @@ class ApiEndpointTest extends AbstractPostgresIntegrationTest {
         Measurement saved = measurementService.record(measurement);
 
         assertThat(saved.getReceivedAt()).isNotNull();
-        assertThat(devices.findById(deviceUuid)).hasValueSatisfying(savedDevice ->
-                assertThat(Duration.between(savedDevice.getLastSeenAt(), saved.getReceivedAt()).abs())
-                        .isLessThanOrEqualTo(Duration.ofMillis(1))
-        );
+        assertThat(measurements.findFirstByDeviceUuidOrderByReceivedAtDesc(deviceUuid))
+                .hasValueSatisfying(latestCommunication ->
+                        assertThat(latestCommunication.getUuid()).isEqualTo(saved.getUuid())
+                );
     }
 
     @Test

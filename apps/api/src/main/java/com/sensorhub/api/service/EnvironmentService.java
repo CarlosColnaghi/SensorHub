@@ -1,6 +1,7 @@
 package com.sensorhub.api.service;
 
 import com.sensorhub.api.domain.SensorEnvironment;
+import com.sensorhub.api.repository.DeviceRepository;
 import com.sensorhub.api.repository.EnvironmentRepository;
 import com.sensorhub.api.repository.UserRepository;
 import com.sensorhub.api.web.dto.EnvironmentDtos.CreateEnvironmentRequest;
@@ -15,10 +16,12 @@ public class EnvironmentService {
 
     private final EnvironmentRepository environments;
     private final UserRepository users;
+    private final DeviceRepository devices;
 
-    public EnvironmentService(EnvironmentRepository environments, UserRepository users) {
+    public EnvironmentService(EnvironmentRepository environments, UserRepository users, DeviceRepository devices) {
         this.environments = environments;
         this.users = users;
+        this.devices = devices;
     }
 
     @Transactional
@@ -54,6 +57,9 @@ public class EnvironmentService {
     public void delete(UUID uuid) {
         if (!environments.existsById(uuid)) {
             throw new ResourceNotFoundException("environment not found");
+        }
+        if (devices.existsByEnvironmentUuid(uuid)) {
+            throw new ConflictException("environment has linked devices");
         }
         environments.deleteById(uuid);
     }

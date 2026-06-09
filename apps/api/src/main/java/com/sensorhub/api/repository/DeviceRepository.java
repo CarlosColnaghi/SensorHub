@@ -13,4 +13,6 @@ public interface DeviceRepository extends JpaRepository<Device, UUID> {
     Optional<Device> findByHardwareUuid(UUID hardwareUuid);
 
     List<Device> findByUserUuid(UUID userUuid);
+
+    boolean existsByEnvironmentUuid(UUID environmentUuid);
 }

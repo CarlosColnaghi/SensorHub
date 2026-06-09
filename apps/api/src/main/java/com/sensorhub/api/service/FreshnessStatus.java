@@ -2,7 +2,7 @@ package com.sensorhub.api.service;
 
 public enum FreshnessStatus {
     ONLINE,
-    STALE,
+    OFFLINE,
     NO_DATA,
     INACTIVATED
 }

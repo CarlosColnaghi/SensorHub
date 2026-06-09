@@ -130,7 +130,6 @@ Campos esperados:
 - `name`
 - `environmentUuid`
 - `status`
-- `lastSeenAt`
 - `createdAt`
 - `updatedAt`
 
@@ -143,6 +142,7 @@ Relacionamentos:
 - O `uuid` do dispositivo é o identificador interno do registro no sistema.
 - O `hardwareUuid` é o identificador físico informado pelo firmware ou simulador.
 - O `status` inicial do dispositivo deve ser `ACTIVATED`.
+- A última comunicação do dispositivo deve ser derivada das medições persistidas, usando `measurements.receivedAt`, e não armazenada como atributo cadastral em `devices`.
 - Status aceitos inicialmente: `ACTIVATED` e `INACTIVATED`.
 
 ### Environment
@@ -203,7 +203,7 @@ Relacionamentos:
 - Umidade deve armazenar a unidade de medida informada pelo sensor, inicialmente `RELATIVE_PERCENT`.
 - Conversões futuras devem preservar o valor e a unidade originais da medição recebida.
 - O sistema deve diferenciar timestamp informado pelo sensor de timestamp de recebimento.
-- Um dispositivo sem medições recentes deve poder ser exibido como desatualizado.
+- Um dispositivo sem medições recentes deve poder ser exibido como offline.
 - Toda aplicação criada deve ter execução prevista no Docker Compose.
 
 ## Critérios de aceite da primeira fase

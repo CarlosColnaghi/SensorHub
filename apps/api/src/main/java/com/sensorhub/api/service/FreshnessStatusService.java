@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class FreshnessStatusService {
 
-    private static final Duration STALE_AFTER = Duration.ofMinutes(5);
+    private static final Duration OFFLINE_AFTER = Duration.ofMinutes(1);
 
     private final Clock clock;
 
@@ -19,17 +19,17 @@ public class FreshnessStatusService {
         this.clock = clock;
     }
 
-    public FreshnessStatus status(Device device, Measurement latestMeasurement) {
+    public FreshnessStatus status(Device device, Measurement latestCommunication) {
         if (device.getStatus() == DeviceStatus.INACTIVATED) {
             return FreshnessStatus.INACTIVATED;
         }
-        if (latestMeasurement == null) {
+        if (latestCommunication == null) {
             return FreshnessStatus.NO_DATA;
         }
 
-        Instant reference = device.getLastSeenAt() != null ? device.getLastSeenAt() : latestMeasurement.getMeasuredAt();
-        if (reference.plus(STALE_AFTER).isBefore(Instant.now(clock))) {
-            return FreshnessStatus.STALE;
+        Instant reference = latestCommunication.getReceivedAt();
+        if (reference.plus(OFFLINE_AFTER).isBefore(Instant.now(clock))) {
+            return FreshnessStatus.OFFLINE;
         }
         return FreshnessStatus.ONLINE;
     }

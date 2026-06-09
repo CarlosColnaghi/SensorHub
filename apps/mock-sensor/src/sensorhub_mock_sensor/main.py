@@ -24,7 +24,7 @@ class ConfigError(ValueError):
 
 
 class DeviceResolutionError(RuntimeError):
-    """Raised when a hardware UUID cannot be mapped to an active device."""
+    """Raised when a hardware UUID cannot be mapped to a device."""
 
 
 @dataclass(frozen=True)
@@ -140,6 +140,7 @@ def connect(db: DbConfig):
 class DeviceResolver:
     def __init__(self) -> None:
         self.cache: dict[str, str] = {}
+        self.last_status_by_hardware_uuid: dict[str, str] = {}
 
     def resolve(self, connection, hardware_uuid: str) -> str | None:
         if hardware_uuid in self.cache:
@@ -159,23 +160,29 @@ class DeviceResolver:
         if row is None:
             raise DeviceResolutionError(f"hardware UUID {hardware_uuid} was not found")
 
-        if row[1] != "ACTIVATED":
-            LOGGER.warning(
-                "hardware UUID %s has status %s and will not be simulated",
-                hardware_uuid,
-                row[1],
-            )
+        status = row[1]
+        if status != "ACTIVATED":
+            if self.last_status_by_hardware_uuid.get(hardware_uuid) != status:
+                LOGGER.warning(
+                    "hardware UUID %s has status %s and will not be simulated",
+                    hardware_uuid,
+                    status,
+                )
+            self.last_status_by_hardware_uuid[hardware_uuid] = status
+            self.cache.pop(hardware_uuid, None)
             return None
 
         device_uuid = str(row[0])
+        self.last_status_by_hardware_uuid[hardware_uuid] = status
         self.cache[hardware_uuid] = device_uuid
         return device_uuid
+
+    def forget(self, hardware_uuid: str) -> None:
+        self.cache.pop(hardware_uuid, None)
 
     def resolve_all(self, connection, hardware_uuids: tuple[str, ...]) -> dict[str, str]:
         for hardware_uuid in hardware_uuids:
             self.resolve(connection, hardware_uuid)
-        if not self.cache:
-            raise DeviceResolutionError("no ACTIVATED devices available for simulation")
         return dict(self.cache)
 
 
@@ -222,9 +229,22 @@ class MeasurementGenerator:
 
 
 class MeasurementRepository:
-    def insert(self, connection, device_uuid: str, measurement: Measurement) -> None:
+    def insert(self, connection, device_uuid: str, measurement: Measurement) -> bool:
         try:
             with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT status
+                    FROM devices
+                    WHERE uuid = %s
+                    """,
+                    (device_uuid,),
+                )
+                row = cursor.fetchone()
+                if row is None or row[0] != "ACTIVATED":
+                    connection.rollback()
+                    return False
+
                 cursor.execute(
                     """
                     INSERT INTO measurements (
@@ -247,16 +267,8 @@ class MeasurementRepository:
                         measurement.measured_at,
                     ),
                 )
-                cursor.execute(
-                    """
-                    UPDATE devices
-                    SET last_seen_at = %s,
-                        updated_at = now()
-                    WHERE uuid = %s
-                    """,
-                    (measurement.measured_at, device_uuid),
-                )
             connection.commit()
+            return True
         except Exception:
             connection.rollback()
             raise
@@ -282,21 +294,36 @@ class MockSensorRunner:
 
     def run_forever(self) -> None:
         with self.connection_factory(self.config.db) as connection:
-            device_map = self.resolver.resolve_all(connection, self.config.hardware_uuids)
-            LOGGER.info("resolved %s active device(s)", len(device_map))
+            last_logged_device_count: int | None = None
 
             while self.running:
+                device_map = self.resolver.resolve_all(connection, self.config.hardware_uuids)
+                if len(device_map) != last_logged_device_count:
+                    if device_map:
+                        LOGGER.info("resolved %s active device(s)", len(device_map))
+                    else:
+                        LOGGER.warning("no ACTIVATED devices available for simulation")
+                    last_logged_device_count = len(device_map)
+
                 for hardware_uuid, device_uuid in device_map.items():
                     measurement = self.generator.next_measurement(device_uuid)
                     try:
-                        self.repository.insert(connection, device_uuid, measurement)
-                        LOGGER.info(
-                            "inserted measurement hardware_uuid=%s device_uuid=%s temperature=%.2f humidity=%.2f",
-                            hardware_uuid,
-                            device_uuid,
-                            measurement.temperature,
-                            measurement.humidity,
-                        )
+                        inserted = self.repository.insert(connection, device_uuid, measurement)
+                        if inserted:
+                            LOGGER.info(
+                                "inserted measurement hardware_uuid=%s device_uuid=%s temperature=%.2f humidity=%.2f",
+                                hardware_uuid,
+                                device_uuid,
+                                measurement.temperature,
+                                measurement.humidity,
+                            )
+                        else:
+                            self.resolver.forget(hardware_uuid)
+                            LOGGER.warning(
+                                "skipped measurement hardware_uuid=%s device_uuid=%s because device is not activated",
+                                hardware_uuid,
+                                device_uuid,
+                            )
                     except Exception:
                         LOGGER.exception(
                             "failed to insert measurement for hardware_uuid=%s",

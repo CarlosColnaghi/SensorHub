@@ -10,6 +10,7 @@ import com.sensorhub.api.repository.MeasurementRepository;
 import com.sensorhub.api.repository.UserRepository;
 import com.sensorhub.api.web.dto.DashboardDtos.DashboardDeviceResponse;
 import com.sensorhub.api.web.dto.DashboardDtos.DashboardLatestMeasurementResponse;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -72,9 +73,13 @@ public class DashboardService {
                 .map(device -> {
                     Measurement latest = measurements.findFirstByDeviceUuidOrderByMeasuredAtDesc(device.getUuid())
                             .orElse(null);
+                    Measurement latestCommunication = measurements
+                            .findFirstByDeviceUuidOrderByReceivedAtDesc(device.getUuid())
+                            .orElse(null);
                     return DashboardLatestMeasurementResponse.from(
                             device,
-                            freshness.status(device, latest).name(),
+                            freshness.status(device, latestCommunication).name(),
+                            lastSeenAt(latestCommunication),
                             latest
                     );
                 })
@@ -98,5 +103,9 @@ public class DashboardService {
         }
         SensorEnvironment environment = environmentsByUuid.get(environmentUuid);
         return environment == null ? null : environment.getName();
+    }
+
+    private Instant lastSeenAt(Measurement latestCommunication) {
+        return latestCommunication == null ? null : latestCommunication.getReceivedAt();
     }
 }

@@ -38,11 +38,16 @@ public final class DashboardDtos {
             Instant lastSeenAt,
             LatestMeasurementResponse latestMeasurement
     ) {
-        public static DashboardLatestMeasurementResponse from(Device device, String freshnessStatus, Measurement latest) {
+        public static DashboardLatestMeasurementResponse from(
+                Device device,
+                String freshnessStatus,
+                Instant lastSeenAt,
+                Measurement latest
+        ) {
             return new DashboardLatestMeasurementResponse(
                     device.getUuid(),
                     freshnessStatus,
-                    device.getLastSeenAt(),
+                    lastSeenAt,
                     LatestMeasurementResponse.from(latest)
             );
         }

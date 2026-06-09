@@ -76,6 +76,19 @@ class SchemaMigrationTest extends AbstractPostgresIntegrationTest {
     }
 
     @Test
+    void devicesTableDoesNotStoreDerivedLastSeenAt() {
+        Integer columnCount = jdbc.queryForObject("""
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'devices'
+                  AND column_name = 'last_seen_at'
+                """, Integer.class);
+
+        assertThat(columnCount).isZero();
+    }
+
+    @Test
     void foreignKeysPreventOrphanRecords() {
         UUID missingUserUuid = UUID.randomUUID();
         UUID missingDeviceUuid = UUID.randomUUID();

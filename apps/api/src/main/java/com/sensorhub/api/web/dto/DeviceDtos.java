@@ -35,7 +35,6 @@ public final class DeviceDtos {
             UUID environmentUuid,
             DeviceStatus status,
             String name,
-            Instant lastSeenAt,
             Instant createdAt,
             Instant updatedAt
     ) {
@@ -47,7 +46,6 @@ public final class DeviceDtos {
                     device.getEnvironmentUuid(),
                     device.getStatus(),
                     device.getName(),
-                    device.getLastSeenAt(),
                     device.getCreatedAt(),
                     device.getUpdatedAt()
             );

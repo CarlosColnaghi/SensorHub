@@ -56,5 +56,17 @@ services:
       api:
         condition: service_started
 
+  mobile:
+    image: ghcr.io/cirruslabs/flutter:stable
+    container_name: sensorhub-mobile-check
+    working_dir: /workspace/apps/mobile
+    profiles:
+      - mobile
+    environment:
+      SENSORHUB_API_BASE_URL: http://api:8080
+    volumes:
+      - .:/workspace
+    command: flutter test
+
 volumes:
   postgres_data:

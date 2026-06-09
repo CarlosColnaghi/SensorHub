@@ -21,16 +21,6 @@ Incluído nesta spec:
 - Tela de perfil de usuário usando os dados da API.
 - Estados de carregamento, vazio, erro e sem atualização recente.
 
-Fora deste escopo inicial:
-
-- Autenticação e autorização.
-- Push notifications.
-- Alertas configuráveis.
-- Funcionamento offline.
-- Provisionamento automático de hardware.
-- Comunicação direta com MQTT, PostgreSQL ou simulador Python.
-- Processamento local de agregações históricas.
-
 ## Usuários e sistemas envolvidos
 
 - Usuário final: consulta sensores, cadastra dispositivos, cria ambientes e visualiza perfil.
@@ -49,7 +39,7 @@ Ao abrir o app, a tela inicial deve listar os sensores disponíveis em cards. Ca
 - umidade atual;
 - horário da última atualização;
 - status de atualização calculado pela API;
-- indicação visual para dispositivo sem medição, desatualizado ou inativado.
+- indicação visual para dispositivo sem medição, offline ou inativado.
 
 A tela inicial deve separar dados estáveis de dados variáveis. Metadados de dispositivos e ambientes devem ser carregados sob demanda ou com menor frequência. Leituras atuais, última comunicação e status de atualização devem ser atualizados por polling em endpoint específico de medições. O app não deve consultar individualmente cada sensor para montar ou atualizar os cards da tela inicial.
 
@@ -92,6 +82,36 @@ O app deve possuir um menu de navegação com acesso a:
 - dispositivos;
 - ambientes;
 - perfil.
+
+A tela de perfil deve exibir somente os dados básicos do usuário:
+
+- nome;
+- email.
+
+O app não deve exibir o UUID do usuário na tela de perfil. O campo de email deve ser somente leitura. Quando houver edição de perfil nesta primeira versão, ela deve permitir alterar apenas o nome.
+
+A tela de dispositivos deve listar os dispositivos cadastrados do usuário e permitir abrir um dispositivo para gerenciamento. Ao tocar em um dispositivo na lista, o usuário deve conseguir:
+
+- editar nome amigável;
+- editar ambiente associado;
+- inativar o dispositivo;
+- reativar o dispositivo, quando ele estiver inativado;
+- excluir o dispositivo.
+
+A inativação deve manter o dispositivo e seu histórico no sistema, mas marcar o dispositivo como indisponível para operação normal no app. Enquanto o dispositivo estiver inativado, seus dados não devem continuar sendo atualizados no dashboard do aplicativo pelo polling da tela inicial. A tela deve mostrar o estado inativado e preservar a última leitura conhecida apenas como dado histórico visual.
+
+Quando um dispositivo estiver ativo, a ação administrativa deve aparecer como `Inativar dispositivo`. Quando o dispositivo já estiver inativado, essa ação deve mudar para `Reativar dispositivo` e usar um ícone de play. Ao reativar, o dashboard do app volta a atualizar os dados do dispositivo pelo polling normal.
+
+A exclusão deve ser tratada como operação destrutiva e irreversível. Antes de excluir um dispositivo, o app deve exibir um pop-up de confirmação informando que todas as medições relacionadas ao sensor serão perdidas e que a ação não pode ser revertida.
+
+Ao confirmar a exclusão de um dispositivo, a API deve excluir também todas as medições relacionadas a esse dispositivo. O app não deve tentar excluir medições individualmente.
+
+A tela de ambientes deve listar os ambientes cadastrados do usuário e permitir abrir um ambiente para gerenciamento. Ao tocar em um ambiente na lista, o usuário deve conseguir:
+
+- editar nome;
+- excluir o ambiente.
+
+Não deve ser possível excluir um ambiente que possua algum dispositivo vinculado. Se o usuário tentar excluir um ambiente nessa situação, o app deve exibir mensagem de warning ou erro explicando que é necessário remover, inativar ou reassociar os dispositivos antes da exclusão do ambiente.
 
 ## Paleta e UI
 
@@ -140,8 +160,10 @@ Rotas iniciais sugeridas:
 - `/devices`: listagem e gerenciamento de dispositivos.
 - `/devices/new`: cadastro de dispositivo.
 - `/devices/{deviceUuid}`: detalhe do sensor.
+- `/devices/{deviceUuid}/edit`: edição e ações administrativas do dispositivo.
 - `/environments`: listagem e gerenciamento de ambientes.
 - `/environments/new`: cadastro de ambiente.
+- `/environments/{environmentUuid}/edit`: edição e exclusão do ambiente.
 - `/profile`: perfil do usuário.
 
 A navegação principal deve usar uma barra inferior ou menu lateral, conforme o padrão visual escolhido na implementação. A primeira versão deve priorizar acesso rápido a início, dispositivos, ambientes e perfil.
@@ -159,9 +181,15 @@ Para a tela inicial e a tela de detalhe, a API deve fornecer contratos próprios
 
 O app pode consumir os endpoints CRUD existentes para:
 
-- listar, criar, editar e remover dispositivos;
+- listar, criar, editar, inativar e remover dispositivos;
 - listar, criar, editar e remover ambientes;
 - consultar e atualizar dados do usuário.
+
+As operações destrutivas devem respeitar os contratos da API:
+
+- Remover dispositivo deve apagar o dispositivo e todas as medições vinculadas a ele.
+- Remover ambiente deve falhar quando existir algum dispositivo vinculado ao ambiente.
+- Atualizar perfil deve aceitar alteração de nome e preservar o email como dado somente leitura na UI.
 
 ### Metadados do card
 
@@ -199,10 +227,12 @@ Exemplo de item retornado por `GET /api/v1/users/{userUuid}/dashboard/measuremen
 
 Quando um sensor não possuir medições, `latestMeasurement` deve vir nulo e o card deve renderizar estado sem dados.
 
+`lastSeenAt` deve ser tratado pelo app como a última comunicação calculada pela API a partir de `measurements.receivedAt`. O app não deve assumir que esse campo pertence ao cadastro do dispositivo.
+
 `freshnessStatus` deve ser calculado pela API. Valores iniciais:
 
 - `ONLINE`: dispositivo ativo com leitura recente.
-- `STALE`: dispositivo ativo, mas sem leitura dentro da janela configurada pela API.
+- `OFFLINE`: dispositivo ativo, mas sem leitura dentro da janela configurada pela API.
 - `NO_DATA`: dispositivo ativo sem medições.
 - `INACTIVATED`: dispositivo inativado administrativamente.
 
@@ -265,8 +295,19 @@ Exemplo de resposta esperada para o overview de medições:
 - O app deve tratar `204 No Content` e listas vazias como estado vazio, não como erro fatal.
 - O app deve permitir cadastrar dispositivo informando `hardwareUuid`, nome opcional, usuário e ambiente opcional.
 - O app deve permitir associar ou desassociar dispositivo de ambiente.
-- O app deve permitir criar e editar ambientes.
-- O app deve exibir claramente quando um sensor está sem dados, desatualizado ou inativado.
+- O app deve permitir editar, inativar e excluir dispositivos existentes.
+- O app deve permitir reativar dispositivos inativados.
+- Dispositivos inativados não devem continuar recebendo atualização de dados no dashboard do app.
+- O botão de ação administrativa deve alternar entre `Inativar dispositivo` e `Reativar dispositivo` conforme o status do dispositivo.
+- O botão `Reativar dispositivo` deve usar ícone de play.
+- O app deve exigir confirmação explícita antes de excluir um dispositivo.
+- A exclusão de dispositivo deve ser delegada à API e deve remover todas as medições relacionadas ao dispositivo.
+- O app deve permitir criar, editar e excluir ambientes.
+- O app não deve permitir concluir a exclusão de ambiente quando a API indicar que existem dispositivos vinculados.
+- A tela de perfil deve omitir o UUID do usuário.
+- A tela de perfil deve exibir o email como campo somente leitura.
+- A tela de perfil deve permitir editar apenas o nome do usuário enquanto autenticação e troca de email estiverem fora de escopo.
+- O app deve exibir claramente quando um sensor está sem dados, offline ou inativado.
 - O intervalo de atualização da home deve ser configurável no código, com padrão inicial sugerido de 5 segundos.
 - O app deve evitar disparar múltiplas requisições simultâneas para atualizar a mesma tela.
 
@@ -276,6 +317,11 @@ Exemplo de resposta esperada para o overview de medições:
 - API indisponível deve exibir mensagem clara e preservar a navegação.
 - Erro de validação no cadastro deve ser exibido próximo ao campo correspondente quando possível.
 - Conflito ao cadastrar `hardwareUuid` duplicado deve ser exibido como erro de dispositivo já cadastrado.
+- Falha ao editar, inativar ou excluir dispositivo deve preservar os dados atuais em tela e exibir mensagem de erro.
+- Cancelamento do pop-up de exclusão de dispositivo não deve disparar chamada de exclusão para a API.
+- Falha ao excluir dispositivo deve deixar claro que o dispositivo e suas medições não foram removidos.
+- Tentativa de excluir ambiente com dispositivo vinculado deve exibir warning ou erro acionável, informando que o ambiente ainda possui dispositivos associados.
+- Falha ao editar ou excluir ambiente deve preservar os dados atuais em tela e exibir mensagem de erro.
 - Sensor sem medições deve exibir estado vazio nos valores e gráficos.
 - Intervalo sem dados deve exibir gráfico vazio e overview indisponível.
 - Sessão de usuário ainda não autenticada deve usar o usuário seedado ou seleção local temporária enquanto autenticação estiver fora de escopo.
@@ -285,13 +331,26 @@ Exemplo de resposta esperada para o overview de medições:
 - Existe scaffold Flutter em `apps/mobile`.
 - O app possui tema dark mode com a paleta definida nesta spec.
 - A tela inicial exibe cards de sensores consumidos da API.
+- A tela inicial exibe uma saudação contextual com `Bom dia`, `Boa tarde` ou `Boa noite`, seguida do nome do usuário atual.
 - A tela inicial atualiza os cards periodicamente.
 - O app navega do card para o detalhe do sensor.
 - A tela de detalhe exibe leitura atual, gráfico de temperatura, gráfico de umidade e overview vindos da API.
 - O app possui menu para início, dispositivos, ambientes e perfil.
 - O app permite cadastrar dispositivo por `hardwareUuid`.
+- O app permite abrir um dispositivo cadastrado e editar seus dados.
+- O app permite inativar um dispositivo cadastrado.
+- O app permite reativar um dispositivo inativado usando botão com ícone de play.
+- O app deixa de atualizar dados de dispositivo inativado no dashboard.
+- O app exibe confirmação antes de excluir um dispositivo e informa que a ação remove as medições e não pode ser revertida.
+- O app permite excluir dispositivo após confirmação bem-sucedida pela API.
 - O app permite cadastrar ambiente.
+- O app permite abrir um ambiente cadastrado e editar seus dados.
+- O app permite excluir ambiente sem dispositivos vinculados.
+- O app bloqueia ou informa erro ao tentar excluir ambiente com dispositivos vinculados.
 - O app permite associar dispositivo a ambiente.
+- A tela de perfil exibe apenas nome e email.
+- A tela de perfil não exibe UUID do usuário.
+- O email na tela de perfil é somente leitura.
 - O app exibe estados de carregamento, vazio e erro.
 - O app não implementa agregações históricas ou cálculo de overview localmente.
 - Existe configuração prevista no Docker Compose quando houver execução aplicável ao app ou suporte de desenvolvimento local.
@@ -304,7 +363,7 @@ Exemplo de resposta esperada para o overview de medições:
 - Testar renderização da tela inicial com lista de cards.
 - Testar card de sensor com leitura atual.
 - Testar card de sensor sem medições.
-- Testar card de sensor desatualizado.
+- Testar card de sensor offline.
 - Testar navegação do card para tela de detalhe.
 - Testar renderização da tela de detalhe com gráficos e overview.
 - Testar estados de carregamento, vazio e erro.
@@ -313,9 +372,22 @@ Exemplo de resposta esperada para o overview de medições:
 
 - Testar cadastro de dispositivo com `hardwareUuid` válido.
 - Testar erro de `hardwareUuid` inválido ou duplicado.
+- Testar edição de dispositivo existente.
+- Testar inativação de dispositivo existente.
+- Testar que dispositivo inativado deixa de receber atualização de dados no dashboard.
+- Testar que dispositivo inativado exibe ação `Reativar dispositivo` com ícone de play.
+- Testar reativação de dispositivo inativado.
+- Testar pop-up de confirmação para exclusão de dispositivo.
+- Testar cancelamento da exclusão de dispositivo sem chamada destrutiva para a API.
+- Testar exclusão de dispositivo confirmada.
 - Testar criação de ambiente.
+- Testar edição de ambiente existente.
+- Testar exclusão de ambiente sem dispositivos vinculados.
+- Testar erro ou warning ao tentar excluir ambiente com dispositivos vinculados.
 - Testar associação de dispositivo a ambiente.
-- Testar atualização de perfil.
+- Testar atualização de perfil alterando apenas o nome.
+- Testar que email é exibido como somente leitura no perfil.
+- Testar que UUID do usuário não é exibido no perfil.
 
 ### Integração com API
 
@@ -325,6 +397,8 @@ Exemplo de resposta esperada para o overview de medições:
 - Testar que a home usa o endpoint de leituras atuais para polling dos dados variáveis.
 - Testar que o app não dispara uma requisição por sensor para atualizar a home.
 - Testar que o overview é lido da resposta da API.
+- Testar que a exclusão de dispositivo usa o endpoint de remoção de dispositivo e não tenta remover medições individualmente.
+- Testar tratamento de erro da API ao excluir ambiente com dispositivos vinculados.
 
 ## Impacto técnico previsto
 

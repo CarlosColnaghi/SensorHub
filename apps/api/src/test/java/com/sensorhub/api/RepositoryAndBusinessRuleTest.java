@@ -12,6 +12,7 @@ import com.sensorhub.api.repository.DeviceRepository;
 import com.sensorhub.api.repository.EnvironmentRepository;
 import com.sensorhub.api.repository.MeasurementRepository;
 import com.sensorhub.api.repository.UserRepository;
+import com.sensorhub.api.service.InvalidRequestException;
 import com.sensorhub.api.service.MeasurementService;
 import com.sensorhub.api.service.ResourceNotFoundException;
 import java.math.BigDecimal;
@@ -80,8 +81,20 @@ class RepositoryAndBusinessRuleTest extends AbstractPostgresIntegrationTest {
 
         assertThat(saved.getReceivedAt()).isBetween(beforeRecord, afterRecord);
         assertThat(saved.getReceivedAt()).isNotEqualTo(Instant.parse("2026-01-01T00:00:00Z"));
-        assertThat(devices.findById(device.getUuid())).hasValueSatisfying(found ->
-                assertThat(found.getLastSeenAt()).isNotNull());
+    }
+
+    @Test
+    void recordingMeasurementRejectsInactivatedDevice() {
+        AppUser user = createUser("Inactive Device User", uniqueEmail("inactive-device"));
+        Device device = createDevice(user.getUuid(), UUID.randomUUID(), null);
+        device.setStatus(DeviceStatus.INACTIVATED);
+        devices.saveAndFlush(device);
+        Measurement measurement = newMeasurement(device.getUuid(), "22.00");
+
+        assertThatThrownBy(() -> measurementService.record(measurement))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage("device is inactivated");
+        assertThat(measurements.countByDeviceUuid(device.getUuid())).isZero();
     }
 
     private AppUser createUser(String name, String email) {

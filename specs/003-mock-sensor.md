@@ -17,7 +17,6 @@ Incluído nesta spec:
 - Geração contínua de medições a cada intervalo configurável.
 - Geração de temperatura e umidade com variação aleatória dentro de ranges definidos.
 - Persistência direta em PostgreSQL.
-- Atualização de `devices.last_seen_at` para refletir a última medição simulada.
 - Execução prevista via Docker Compose.
 
 ## Comportamento esperado
@@ -41,8 +40,7 @@ Cada medição deve:
 - usar `CELSIUS` como `temperature_unit`;
 - usar `RELATIVE_PERCENT` como `humidity_unit`;
 - definir `measured_at` com o timestamp atual;
-- deixar `received_at` ser definido pelo banco ou definir explicitamente com o mesmo instante de recebimento do script;
-- atualizar `devices.last_seen_at` com o timestamp de recebimento.
+- definir `received_at` explicitamente com o mesmo instante de recebimento do script ou deixar o banco preencher o valor padrão.
 
 O loop deve continuar até o processo ser interrompido.
 
@@ -109,6 +107,7 @@ A inserção deve gravar pelo menos:
 - `humidity`
 - `humidity_unit`
 - `measured_at`
+- `received_at`
 
 Exemplo conceitual:
 
@@ -119,16 +118,9 @@ INSERT INTO measurements (
     temperature_unit,
     humidity,
     humidity_unit,
-    measured_at
-) VALUES (?, ?, 'CELSIUS', ?, 'RELATIVE_PERCENT', ?);
-```
-
-Depois da inserção, o script deve atualizar o dispositivo no mesmo ciclo:
-
-```sql
-UPDATE devices
-SET last_seen_at = ?
-WHERE uuid = ?;
+    measured_at,
+    received_at
+) VALUES (?, ?, 'CELSIUS', ?, 'RELATIVE_PERCENT', ?, ?);
 ```
 
 ## Regras de negócio
@@ -144,8 +136,7 @@ WHERE uuid = ?;
 - Temperatura deve ser arredondada para duas casas decimais.
 - Umidade deve ser arredondada para duas casas decimais.
 - O intervalo padrão entre ciclos deve ser de 5 segundos.
-- O script deve atualizar `devices.last_seen_at` para permitir que a API indique última comunicação.
-- A persistência da medição e a atualização de `last_seen_at` devem acontecer na mesma transação quando possível.
+- O script não deve atualizar estado derivado em `devices`; a API deve calcular última comunicação a partir de `measurements.received_at`.
 
 ## Erros e casos limite
 
@@ -167,7 +158,7 @@ WHERE uuid = ?;
 - O script resolve `hardwareUuid` para `devices.uuid`.
 - O script mantém cache em memória para o mapeamento `hardwareUuid -> deviceUuid`.
 - O script insere registros válidos na tabela `measurements`.
-- O script atualiza `devices.last_seen_at`.
+- O script preenche `measurements.received_at` ou permite que o banco preencha esse campo.
 - O script gera temperatura e umidade dentro dos ranges configurados.
 - O script mantém variações consecutivas próximas, respeitando os steps máximos configurados.
 - O intervalo padrão de geração é 5 segundos.
@@ -196,7 +187,7 @@ WHERE uuid = ?;
 - Testar resolução de `hardwareUuid` para `deviceUuid`.
 - Testar que dispositivos `INACTIVATED` não entram no cache ativo.
 - Testar inserção de medição usando `device_uuid` interno.
-- Testar atualização de `devices.last_seen_at`.
+- Testar persistência de `received_at` na medição simulada.
 
 ## Observações técnicas
 

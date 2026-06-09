@@ -27,5 +27,9 @@ public interface MeasurementRepository extends JpaRepository<Measurement, UUID> 
 
     Optional<Measurement> findFirstByDeviceUuidOrderByMeasuredAtDesc(UUID deviceUuid);
 
+    Optional<Measurement> findFirstByDeviceUuidOrderByReceivedAtDesc(UUID deviceUuid);
+
     List<Measurement> findByDeviceUuidAndMeasuredAtBetweenOrderByMeasuredAtAsc(UUID deviceUuid, Instant from, Instant to);
+
+    long countByDeviceUuid(UUID deviceUuid);
 }

@@ -135,15 +135,16 @@ class DeviceResolverTest(unittest.TestCase):
         self.assertEqual(resolver.cache, {})
         self.assertIn("will not be simulated", logs.output[0])
 
-    def test_rejects_when_no_active_devices_are_available(self):
+    def test_returns_empty_map_when_no_active_devices_are_available(self):
         hardware_uuid = "b0fee3a6-ae91-4265-9365-36f793f32f06"
         device_uuid = str(UUID("fe0a2a2e-3222-45ef-91e5-e285ccbe70a2"))
         connection = FakeConnection(rows=[(device_uuid, "INACTIVATED")])
         resolver = DeviceResolver()
 
         with self.assertLogs("sensorhub_mock_sensor", level="WARNING"):
-            with self.assertRaises(DeviceResolutionError):
-                resolver.resolve_all(connection, (hardware_uuid,))
+            resolved = resolver.resolve_all(connection, (hardware_uuid,))
+
+        self.assertEqual(resolved, {})
 
     def test_resolve_all_keeps_active_devices_when_some_are_inactivated(self):
         active_hardware_uuid = "b0fee3a6-ae91-4265-9365-36f793f32f06"
@@ -168,8 +169,8 @@ class DeviceResolverTest(unittest.TestCase):
 
 
 class MeasurementRepositoryTest(unittest.TestCase):
-    def test_inserts_measurement_and_updates_last_seen_in_one_transaction(self):
-        connection = FakeConnection()
+    def test_inserts_measurement_in_one_transaction(self):
+        connection = FakeConnection(rows=[("ACTIVATED",)])
         repository = MeasurementRepository()
         measurement = Measurement(
             temperature=23.45,
@@ -178,21 +179,42 @@ class MeasurementRepositoryTest(unittest.TestCase):
         )
         device_uuid = "fe0a2a2e-3222-45ef-91e5-e285ccbe70a2"
 
-        repository.insert(connection, device_uuid, measurement)
+        inserted = repository.insert(connection, device_uuid, measurement)
 
+        self.assertTrue(inserted)
         self.assertEqual(connection.commits, 1)
         self.assertEqual(connection.rollbacks, 0)
         self.assertEqual(len(connection.executed), 2)
-        insert_sql, insert_params = connection.executed[0]
-        update_sql, update_params = connection.executed[1]
+        status_sql, status_params = connection.executed[0]
+        insert_sql, insert_params = connection.executed[1]
+        self.assertIn("SELECT status FROM devices", status_sql)
+        self.assertEqual(status_params[0], device_uuid)
         self.assertIn("INSERT INTO measurements", insert_sql)
         self.assertEqual(insert_params[0], device_uuid)
         self.assertEqual(insert_params[1], 23.45)
         self.assertEqual(insert_params[2], "CELSIUS")
         self.assertEqual(insert_params[3], 67.89)
         self.assertEqual(insert_params[4], "RELATIVE_PERCENT")
-        self.assertIn("UPDATE devices", update_sql)
-        self.assertEqual(update_params[1], device_uuid)
+
+    def test_skips_measurement_when_device_is_not_activated(self):
+        connection = FakeConnection(rows=[("INACTIVATED",)])
+        repository = MeasurementRepository()
+        measurement = Measurement(
+            temperature=23.45,
+            humidity=67.89,
+            measured_at="2026-06-04T10:00:00Z",
+        )
+
+        inserted = repository.insert(
+            connection,
+            "fe0a2a2e-3222-45ef-91e5-e285ccbe70a2",
+            measurement,
+        )
+
+        self.assertFalse(inserted)
+        self.assertEqual(connection.commits, 0)
+        self.assertEqual(connection.rollbacks, 1)
+        self.assertEqual(len(connection.executed), 1)
 
     def test_rolls_back_on_insert_failure(self):
         connection = FakeConnection(raise_on_execute=True)

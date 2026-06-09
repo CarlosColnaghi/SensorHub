@@ -39,9 +39,6 @@ public class Device {
     @Column(name = "status", nullable = false, length = 32)
     private DeviceStatus status;
 
-    @Column(name = "last_seen_at")
-    private Instant lastSeenAt;
-
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -90,14 +87,6 @@ public class Device {
 
     public void setStatus(DeviceStatus status) {
         this.status = status;
-    }
-
-    public Instant getLastSeenAt() {
-        return lastSeenAt;
-    }
-
-    public void setLastSeenAt(Instant lastSeenAt) {
-        this.lastSeenAt = lastSeenAt;
     }
 
     public Instant getCreatedAt() {
