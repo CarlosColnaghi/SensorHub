@@ -189,7 +189,7 @@ class _HomeGreeting extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Acompanhe seus sensores em tempo real.',
+            'Acompanhe seus sensores em tempo real:',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
         ],

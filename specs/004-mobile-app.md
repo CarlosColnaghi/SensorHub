@@ -119,10 +119,10 @@ O app deve ser desenhado para dark mode como experiência principal. A paleta in
 
 Cores base:
 
-- `background`: `#0B0F14`
-- `surface`: `#121821`
-- `surfaceAlt`: `#182231`
-- `border`: `#273244`
+- `background`: `#111214`
+- `surface`: `#191B1F`
+- `surfaceAlt`: `#22252B`
+- `border`: `#343842`
 - `textPrimary`: `#F4F7FB`
 - `textSecondary`: `#A7B3C2`
 - `textMuted`: `#738195`

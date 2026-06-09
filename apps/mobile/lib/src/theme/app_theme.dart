@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  static const background = Color(0xFF0B0F14);
-  static const surface = Color(0xFF121821);
-  static const surfaceAlt = Color(0xFF182231);
-  static const border = Color(0xFF273244);
+  static const background = Color(0xFF111214);
+  static const surface = Color(0xFF191B1F);
+  static const surfaceAlt = Color(0xFF22252B);
+  static const border = Color(0xFF343842);
   static const textPrimary = Color(0xFFF4F7FB);
   static const textSecondary = Color(0xFFA7B3C2);
   static const textMuted = Color(0xFF738195);

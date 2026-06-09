@@ -7,7 +7,7 @@ SET name = EXCLUDED.name,
 INSERT INTO devices (user_uuid, hardware_uuid, name, environment_uuid, status)
 SELECT uuid,
        'b0fee3a6-ae91-4265-9365-36f793f32f06'::uuid,
-       'Admin seed sensor',
+       'Test sensor',
        NULL,
        'ACTIVATED'
 FROM users

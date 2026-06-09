@@ -131,7 +131,7 @@ class SchemaMigrationTest extends AbstractPostgresIntegrationTest {
                 SELECT user_uuid
                 FROM devices
                 WHERE hardware_uuid = 'b0fee3a6-ae91-4265-9365-36f793f32f06'::uuid
-                  AND name = 'Admin seed sensor'
+                  AND name = 'Test sensor'
                   AND status = 'ACTIVATED'
                   AND environment_uuid IS NULL
                 """, UUID.class);
