@@ -113,15 +113,17 @@ class _MeasurementChartState extends State<MeasurementChart> {
     final minTime = widget.points.first.timestamp.millisecondsSinceEpoch;
     final maxTime = widget.points.last.timestamp.millisecondsSinceEpoch;
     final timeRange = math.max(maxTime - minTime, 1);
+    final hasSinglePoint = widget.points.length == 1;
 
     var selectedIndex = 0;
     var smallestDistance = double.infinity;
     for (var i = 0; i < widget.points.length; i++) {
-      final pointX =
-          chart.left +
-          ((widget.points[i].timestamp.millisecondsSinceEpoch - minTime) /
-                  timeRange) *
-              chart.width;
+      final pointX = hasSinglePoint
+          ? chart.center.dx
+          : chart.left +
+                ((widget.points[i].timestamp.millisecondsSinceEpoch - minTime) /
+                        timeRange) *
+                    chart.width;
       final distance = (pointX - x).abs();
       if (distance < smallestDistance) {
         smallestDistance = distance;
@@ -166,6 +168,7 @@ class _LineChartPainter extends CustomPainter {
     final minTime = points.first.timestamp.millisecondsSinceEpoch;
     final maxTime = points.last.timestamp.millisecondsSinceEpoch;
     final timeRange = math.max(maxTime - minTime, 1);
+    final hasSinglePoint = points.length == 1;
 
     final gridPaint = Paint()
       ..color = AppColors.border
@@ -210,17 +213,32 @@ class _LineChartPainter extends CustomPainter {
       ..strokeJoin = StrokeJoin.round;
     canvas.drawPath(path, linePaint);
 
-    final fillPath = Path.from(path)
-      ..lineTo(chart.right, chart.bottom)
-      ..lineTo(chart.left, chart.bottom)
-      ..close();
-    final fillPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [color.withValues(alpha: 0.22), color.withValues(alpha: 0.02)],
-      ).createShader(chart);
-    canvas.drawPath(fillPath, fillPaint);
+    if (hasSinglePoint) {
+      final offset = _pointOffset(
+        points.first,
+        chart,
+        minTime,
+        timeRange,
+        minValue,
+        range,
+      );
+      _drawPointMarker(canvas, offset, radius: 5);
+    } else {
+      final fillPath = Path.from(path)
+        ..lineTo(chart.right, chart.bottom)
+        ..lineTo(chart.left, chart.bottom)
+        ..close();
+      final fillPaint = Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            color.withValues(alpha: 0.22),
+            color.withValues(alpha: 0.02),
+          ],
+        ).createShader(chart);
+      canvas.drawPath(fillPath, fillPaint);
+    }
 
     _drawText(
       canvas,
@@ -276,10 +294,11 @@ class _LineChartPainter extends CustomPainter {
     double minValue,
     double range,
   ) {
-    final x =
-        chart.left +
-        ((point.timestamp.millisecondsSinceEpoch - minTime) / timeRange) *
-            chart.width;
+    final x = points.length == 1
+        ? chart.center.dx
+        : chart.left +
+              ((point.timestamp.millisecondsSinceEpoch - minTime) / timeRange) *
+                  chart.width;
     final y =
         chart.bottom - ((_value(point) - minValue) / range) * chart.height;
     return Offset(x, y);
@@ -311,10 +330,7 @@ class _LineChartPainter extends CustomPainter {
       guidePaint,
     );
 
-    final markerPaint = Paint()..color = color;
-    final markerBorderPaint = Paint()..color = AppColors.background;
-    canvas.drawCircle(offset, 6, markerBorderPaint);
-    canvas.drawCircle(offset, 4, markerPaint);
+    _drawPointMarker(canvas, offset, radius: 4);
 
     final label =
         '${_value(point).toStringAsFixed(2)} $unit  ${_timeLabel(point.timestamp)}';
@@ -360,5 +376,16 @@ class _LineChartPainter extends CustomPainter {
       textDirection: TextDirection.ltr,
     )..layout();
     painter.paint(canvas, offset);
+  }
+
+  void _drawPointMarker(
+    Canvas canvas,
+    Offset offset, {
+    required double radius,
+  }) {
+    final markerPaint = Paint()..color = color;
+    final markerBorderPaint = Paint()..color = AppColors.background;
+    canvas.drawCircle(offset, radius + 2, markerBorderPaint);
+    canvas.drawCircle(offset, radius, markerPaint);
   }
 }
