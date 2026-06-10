@@ -26,7 +26,7 @@ Incluído nesta spec:
 - Usuário final: consulta sensores, cadastra dispositivos, cria ambientes e visualiza perfil.
 - App Flutter: renderiza a interface e consome contratos HTTP da API.
 - API: fornece CRUD, leituras atuais, séries temporais, overview e status de atualização.
-- Simulador Python: gera medições mockadas persistidas no PostgreSQL para desenvolvimento local.
+- Simulador Python: gera medições mockadas e publica via MQTT para desenvolvimento local.
 - PostgreSQL: armazena usuários, ambientes, dispositivos e medições.
 
 ## Comportamento esperado

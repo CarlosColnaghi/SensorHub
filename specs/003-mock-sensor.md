@@ -2,9 +2,9 @@
 
 ## Objetivo
 
-Definir o script Python inicial responsável por gerar medições simuladas e persisti-las no PostgreSQL, permitindo desenvolver e testar a API e o app sem depender de sensor físico, broker MQTT ou worker real.
+Definir o script Python responsável por gerar medições simuladas e publicá-las em um broker MQTT, permitindo desenvolver e testar o fluxo de ingestão sem depender de sensor físico real.
 
-O script deve simular o trecho inicial do fluxo de ingestão: receber ou conhecer um `hardwareUuid`, resolver esse identificador físico para o `device_uuid` interno do banco, gerar valores de temperatura e umidade e inserir registros na tabela `measurements`.
+O mock sensor não deve interagir diretamente com o PostgreSQL. Ele deve simular apenas o comportamento de um dispositivo publicando telemetria no tópico MQTT configurado. A validação do dispositivo, resolução de `hardwareUuid` para `devices.uuid` e persistência das medições ficam sob responsabilidade do worker de ingestão definido em `specs/005-worker.md`.
 
 ## Escopo
 
@@ -12,49 +12,88 @@ Incluído nesta spec:
 
 - Script Python em `apps/mock-sensor`.
 - Configuração por variáveis de ambiente.
-- Resolução de `hardwareUuid` para `devices.uuid`.
-- Cache em memória para evitar consulta repetida do mesmo dispositivo.
-- Geração contínua de medições a cada intervalo configurável.
+- Conexão com broker MQTT.
+- Publicação contínua de mensagens MQTT a cada intervalo configurável.
 - Geração de temperatura e umidade com variação aleatória dentro de ranges definidos.
-- Persistência direta em PostgreSQL.
+- Publicação do payload JSON inicial de sensor.
 - Execução prevista via Docker Compose.
+
+Fora deste escopo:
+
+- Conexão direta com PostgreSQL.
+- Consulta à tabela `devices`.
+- Resolução de `hardwareUuid` para `devices.uuid`.
+- Validação de status `ACTIVATED` ou `INACTIVATED`.
+- Persistência de medições.
+- Consumo de mensagens MQTT.
 
 ## Comportamento esperado
 
-Ao iniciar, o script deve ler as variáveis de ambiente, abrir conexão com o PostgreSQL e preparar a lista de `hardwareUuid` que serão simulados.
+Ao iniciar, o script deve ler as variáveis de ambiente, validar a configuração e conectar ao broker MQTT configurado.
 
-Para cada `hardwareUuid` configurado, o script deve consultar a tabela `devices` e resolver o UUID físico para o UUID interno do dispositivo:
+Depois de conectado, o script deve preparar a lista de `hardwareUuid` que serão simulados. Cada `hardwareUuid` representa um sensor físico ou simulado conhecido pelo sistema. O script não deve verificar se esses UUIDs existem no banco.
 
-- entrada: `devices.hardware_uuid`;
-- saída/cache: `devices.uuid`.
+Após a preparação, o script deve entrar em loop e, a cada intervalo configurado, gerar uma medição para cada dispositivo configurado.
 
-Essa resolução deve ficar em memória por meio de um hashmap ou dicionário Python, usando `hardwareUuid` como chave e `deviceUuid` como valor. Depois que um dispositivo for resolvido, o script não deve consultar o banco novamente para esse mesmo `hardwareUuid` enquanto o processo estiver rodando.
+Cada mensagem publicada deve:
 
-Após resolver os dispositivos, o script deve entrar em loop e, a cada intervalo configurado, gerar uma medição para cada dispositivo configurado.
-
-Cada medição deve:
-
-- usar o `device_uuid` interno resolvido pelo cache;
+- usar o `hardwareUuid` configurado;
 - gerar temperatura aleatória;
 - gerar umidade aleatória;
-- usar `CELSIUS` como `temperature_unit`;
-- usar `RELATIVE_PERCENT` como `humidity_unit`;
-- definir `measured_at` com o timestamp atual;
-- definir `received_at` explicitamente com o mesmo instante de recebimento do script ou deixar o banco preencher o valor padrão.
+- usar `CELSIUS` como `temperatureUnit`;
+- usar `RELATIVE_PERCENT` como `humidityUnit`;
+- definir `measuredAt` com o timestamp atual em ISO 8601 UTC;
+- ser publicada no tópico MQTT configurado.
 
 O loop deve continuar até o processo ser interrompido.
 
 ## Dados e contratos
 
+### Tópico MQTT
+
+Tópico padrão:
+
+```text
+sensorhub/telemetry
+```
+
+O tópico pode ser alterado por variável de ambiente. A primeira versão deve usar um único tópico compartilhado por todos os sensores simulados. Tópicos por dispositivo podem ser adicionados depois, se houver necessidade operacional.
+
+### Payload MQTT
+
+Cada mensagem deve usar JSON UTF-8 com o contrato inicial do sensor:
+
+```json
+{
+  "hardwareUuid": "2f4a7d8e-3b6a-4a5c-9f2b-8f4d0d8f3c21",
+  "temperature": 24.7,
+  "temperatureUnit": "CELSIUS",
+  "humidity": 58.2,
+  "humidityUnit": "RELATIVE_PERCENT",
+  "measuredAt": "2026-06-01T14:30:00Z"
+}
+```
+
+Campos:
+
+- `hardwareUuid`: UUID físico do dispositivo simulado.
+- `temperature`: temperatura simulada.
+- `temperatureUnit`: unidade da temperatura, inicialmente `CELSIUS`.
+- `humidity`: umidade simulada.
+- `humidityUnit`: unidade da umidade, inicialmente `RELATIVE_PERCENT`.
+- `measuredAt`: timestamp da medição gerado pelo simulador.
+
+O campo `receivedAt` não deve ser publicado pelo mock sensor. Ele deve ser definido pelo worker no momento da persistência.
+
 ### Variáveis de ambiente
 
-Conexão com PostgreSQL:
+Conexão MQTT:
 
-- `SENSORHUB_DB_HOST`: host do PostgreSQL. Padrão sugerido: `postgres`.
-- `SENSORHUB_DB_PORT`: porta do PostgreSQL. Padrão sugerido: `5432`.
-- `SENSORHUB_DB_NAME`: nome do banco. Padrão sugerido: `sensorhub`.
-- `SENSORHUB_DB_USER`: usuário do banco. Padrão sugerido: `sensorhub`.
-- `SENSORHUB_DB_PASSWORD`: senha do banco. Padrão sugerido: `sensorhub`.
+- `SENSORHUB_MQTT_HOST`: host do broker MQTT. Padrão sugerido: `mqtt`.
+- `SENSORHUB_MQTT_PORT`: porta do broker MQTT. Padrão sugerido: `1883`.
+- `SENSORHUB_MQTT_TOPIC`: tópico de telemetria. Padrão: `sensorhub/telemetry`.
+- `SENSORHUB_MQTT_CLIENT_ID`: identificador do cliente MQTT. Padrão sugerido: `sensorhub-mock-sensor`.
+- `SENSORHUB_MQTT_QOS`: QoS usado na publicação. Padrão inicial: `0`.
 
 Dispositivos simulados:
 
@@ -76,59 +115,12 @@ Umidade:
 - `SENSORHUB_HUMIDITY_MAX`: umidade máxima. Padrão: `80.0`.
 - `SENSORHUB_HUMIDITY_STEP_MAX`: variação máxima por ciclo. Padrão: `1.5`.
 
-### Cache de dispositivos
-
-Formato conceitual do cache:
-
-```text
-{
-  "b0fee3a6-ae91-4265-9365-36f793f32f06": "uuid-interno-do-device"
-}
-```
-
-Consulta usada para resolver o dispositivo:
-
-```sql
-SELECT uuid
-FROM devices
-WHERE hardware_uuid = ?
-  AND status = 'ACTIVATED';
-```
-
-O script deve considerar apenas dispositivos com status `ACTIVATED`. Dispositivos `INACTIVATED` não devem receber novas medições simuladas.
-
-### Inserção de medições
-
-A inserção deve gravar pelo menos:
-
-- `device_uuid`
-- `temperature`
-- `temperature_unit`
-- `humidity`
-- `humidity_unit`
-- `measured_at`
-- `received_at`
-
-Exemplo conceitual:
-
-```sql
-INSERT INTO measurements (
-    device_uuid,
-    temperature,
-    temperature_unit,
-    humidity,
-    humidity_unit,
-    measured_at,
-    received_at
-) VALUES (?, ?, 'CELSIUS', ?, 'RELATIVE_PERCENT', ?, ?);
-```
-
 ## Regras de negócio
 
-- O script deve usar `hardwareUuid` como entrada de configuração e persistir medições usando `device_uuid` interno.
-- O script não deve usar `hardwareUuid` como chave estrangeira em `measurements`.
-- O cache `hardwareUuid -> deviceUuid` deve evitar consultas repetidas a `devices` para UUIDs já resolvidos.
-- Apenas dispositivos com status `ACTIVATED` devem receber medições simuladas.
+- O script deve usar `hardwareUuid` como identificador do sensor publicado no payload.
+- O script não deve conhecer nem usar o UUID interno de `devices.uuid`.
+- O script não deve acessar PostgreSQL.
+- O script não deve filtrar dispositivos por status administrativo.
 - Temperatura e umidade devem permanecer dentro dos ranges configurados.
 - Valores consecutivos devem variar de forma gradual, respeitando `SENSORHUB_TEMPERATURE_STEP_MAX` e `SENSORHUB_HUMIDITY_STEP_MAX`.
 - O primeiro valor gerado para cada dispositivo pode ser aleatório dentro do range completo.
@@ -136,34 +128,34 @@ INSERT INTO measurements (
 - Temperatura deve ser arredondada para duas casas decimais.
 - Umidade deve ser arredondada para duas casas decimais.
 - O intervalo padrão entre ciclos deve ser de 5 segundos.
-- O script não deve atualizar estado derivado em `devices`; a API deve calcular última comunicação a partir de `measurements.received_at`.
+- O mock sensor deve publicar somente mensagens de telemetria; qualquer persistência deve acontecer no worker MQTT.
 
 ## Erros e casos limite
 
 - `SENSORHUB_HARDWARE_UUIDS` ausente deve usar o UUID seedado pela API como padrão.
 - `hardwareUuid` inválido deve impedir a inicialização e registrar erro claro.
-- `hardwareUuid` não encontrado em `devices` deve impedir a inicialização ou remover esse UUID da simulação, registrando erro claro.
-- Dispositivo encontrado com status `INACTIVATED` deve ser ignorado e registrado em log.
-- Falha de conexão com PostgreSQL deve encerrar o processo com erro claro.
-- Falha temporária de insert deve ser registrada e o script deve tentar continuar no próximo ciclo.
+- Falha de conexão com o broker MQTT deve encerrar o processo com erro claro ou tentar reconectar conforme a biblioteca MQTT usada.
+- Falha temporária de publicação deve ser registrada e o script deve tentar continuar no próximo ciclo quando possível.
 - Intervalo menor ou igual a zero deve ser rejeitado.
 - Ranges inválidos, como mínimo maior que máximo, devem ser rejeitados.
 - Steps negativos devem ser rejeitados.
+- QoS diferente de `0`, `1` ou `2` deve ser rejeitado.
 
 ## Critérios de aceite
 
 - Existe um script Python em `apps/mock-sensor`.
 - O script lê configuração por variáveis de ambiente.
 - O script aceita `SENSORHUB_HARDWARE_UUIDS` com um ou mais UUIDs separados por vírgula.
-- O script resolve `hardwareUuid` para `devices.uuid`.
-- O script mantém cache em memória para o mapeamento `hardwareUuid -> deviceUuid`.
-- O script insere registros válidos na tabela `measurements`.
-- O script preenche `measurements.received_at` ou permite que o banco preencha esse campo.
+- O script conecta ao broker MQTT configurado.
+- O script publica mensagens no tópico `sensorhub/telemetry` por padrão.
+- O payload publicado segue o contrato JSON definido nesta spec.
+- O script não abre conexão com PostgreSQL.
 - O script gera temperatura e umidade dentro dos ranges configurados.
 - O script mantém variações consecutivas próximas, respeitando os steps máximos configurados.
 - O intervalo padrão de geração é 5 segundos.
-- Existe configuração no Docker Compose para executar o mock sensor.
-- Existem testes ou verificação objetiva cobrindo configuração, resolução de dispositivo, geração de valores e persistência.
+- Existe configuração no Docker Compose para executar o broker MQTT.
+- Existe configuração no Docker Compose para executar o mock sensor apontando para o broker MQTT.
+- Existem testes ou verificação objetiva cobrindo configuração, geração de valores e serialização/publicação do payload.
 
 ## Testes
 
@@ -174,6 +166,7 @@ INSERT INTO measurements (
 - Testar rejeição de UUID inválido.
 - Testar rejeição de intervalo inválido.
 - Testar rejeição de ranges inválidos.
+- Testar rejeição de QoS inválido.
 
 ### Geração de dados
 
@@ -181,20 +174,20 @@ INSERT INTO measurements (
 - Testar que umidade fica dentro do range.
 - Testar que valores consecutivos respeitam o step máximo configurado.
 - Testar arredondamento para duas casas decimais.
+- Testar geração de `measuredAt` em formato ISO 8601 UTC.
 
-### Banco de dados
+### MQTT
 
-- Testar resolução de `hardwareUuid` para `deviceUuid`.
-- Testar que dispositivos `INACTIVATED` não entram no cache ativo.
-- Testar inserção de medição usando `device_uuid` interno.
-- Testar persistência de `received_at` na medição simulada.
+- Testar serialização do payload JSON.
+- Testar publicação no tópico configurado usando mock ou broker local de teste.
+- Testar que o payload não inclui `deviceUuid` nem `receivedAt`.
+- Testar comportamento quando a publicação falha.
 
 ## Observações técnicas
 
-- O script deve usar biblioteca PostgreSQL adequada para Python, como `psycopg`.
+- O script deve usar uma biblioteca MQTT adequada para Python, como `paho-mqtt`.
 - A implementação deve evitar frameworks pesados.
 - O processo pode ser um loop simples com `time.sleep`.
-- Para execução local, o Docker Compose deve depender do PostgreSQL saudável antes de iniciar o mock sensor.
-- Como as migrations Flyway iniciais ficam na API, o serviço do mock sensor deve iniciar depois do container da API para reduzir risco de consultar tabelas antes da criação do schema.
-- O serviço do mock sensor pode usar `restart: on-failure` no Docker Compose para tolerar a corrida inicial enquanto a API aplica as migrations.
+- Para execução local, o Docker Compose deve iniciar o broker MQTT antes do mock sensor.
+- O serviço do mock sensor pode usar `restart: on-failure` no Docker Compose para tolerar indisponibilidade temporária do broker.
 - O script deve ser útil para desenvolvimento local, demos e geração de massa de dados.

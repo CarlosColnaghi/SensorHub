@@ -1,8 +1,9 @@
+import json
 import random
 import sys
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
-from uuid import UUID
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -10,12 +11,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from sensorhub_mock_sensor.main import (  # noqa: E402
     DEFAULT_HARDWARE_UUID,
     ConfigError,
-    DeviceResolutionError,
-    DeviceResolver,
     Measurement,
     MeasurementGenerator,
-    MeasurementRepository,
+    MockSensorRunner,
     ValueRange,
+    build_payload,
     parse_hardware_uuids,
     read_config,
 )
@@ -25,10 +25,30 @@ class ConfigTest(unittest.TestCase):
     def test_reads_default_config(self):
         config = read_config({})
 
-        self.assertEqual(config.db.host, "postgres")
-        self.assertEqual(config.db.port, 5432)
+        self.assertEqual(config.mqtt.host, "mqtt")
+        self.assertEqual(config.mqtt.port, 1883)
+        self.assertEqual(config.mqtt.topic, "sensorhub/telemetry")
+        self.assertEqual(config.mqtt.client_id, "sensorhub-mock-sensor")
+        self.assertEqual(config.mqtt.qos, 0)
         self.assertEqual(config.hardware_uuids, (DEFAULT_HARDWARE_UUID,))
         self.assertEqual(config.interval_seconds, 5.0)
+
+    def test_reads_mqtt_config(self):
+        config = read_config(
+            {
+                "SENSORHUB_MQTT_HOST": "localhost",
+                "SENSORHUB_MQTT_PORT": "1884",
+                "SENSORHUB_MQTT_TOPIC": "custom/topic",
+                "SENSORHUB_MQTT_CLIENT_ID": "custom-client",
+                "SENSORHUB_MQTT_QOS": "1",
+            }
+        )
+
+        self.assertEqual(config.mqtt.host, "localhost")
+        self.assertEqual(config.mqtt.port, 1884)
+        self.assertEqual(config.mqtt.topic, "custom/topic")
+        self.assertEqual(config.mqtt.client_id, "custom-client")
+        self.assertEqual(config.mqtt.qos, 1)
 
     def test_parses_multiple_hardware_uuids_and_removes_duplicates(self):
         first = "b0fee3a6-ae91-4265-9365-36f793f32f06"
@@ -59,6 +79,10 @@ class ConfigTest(unittest.TestCase):
         with self.assertRaises(ConfigError):
             read_config({"SENSORHUB_HUMIDITY_STEP_MAX": "-0.1"})
 
+    def test_rejects_invalid_qos(self):
+        with self.assertRaises(ConfigError):
+            read_config({"SENSORHUB_MQTT_QOS": "3"})
+
 
 class MeasurementGeneratorTest(unittest.TestCase):
     def test_generates_values_inside_ranges(self):
@@ -68,7 +92,7 @@ class MeasurementGeneratorTest(unittest.TestCase):
             random.Random(1),
         )
 
-        measurement = generator.next_measurement("device-1")
+        measurement = generator.next_measurement("hardware-1")
 
         self.assertGreaterEqual(measurement.temperature, 18.0)
         self.assertLessEqual(measurement.temperature, 32.0)
@@ -82,8 +106,8 @@ class MeasurementGeneratorTest(unittest.TestCase):
             random.Random(7),
         )
 
-        previous = generator.next_measurement("device-1")
-        current = generator.next_measurement("device-1")
+        previous = generator.next_measurement("hardware-1")
+        current = generator.next_measurement("hardware-1")
 
         self.assertLessEqual(abs(current.temperature - previous.temperature), 0.4)
         self.assertLessEqual(abs(current.humidity - previous.humidity), 1.5)
@@ -95,180 +119,75 @@ class MeasurementGeneratorTest(unittest.TestCase):
             random.Random(3),
         )
 
-        measurement = generator.next_measurement("device-1")
+        measurement = generator.next_measurement("hardware-1")
 
         self.assertRegex(f"{measurement.temperature:.2f}", r"^\d+\.\d{2}$")
         self.assertRegex(f"{measurement.humidity:.2f}", r"^\d+\.\d{2}$")
 
 
-class DeviceResolverTest(unittest.TestCase):
-    def test_resolves_active_device_and_caches_result(self):
-        hardware_uuid = "b0fee3a6-ae91-4265-9365-36f793f32f06"
-        device_uuid = str(UUID("fe0a2a2e-3222-45ef-91e5-e285ccbe70a2"))
-        connection = FakeConnection(rows=[(device_uuid, "ACTIVATED")])
-        resolver = DeviceResolver()
-
-        first = resolver.resolve(connection, hardware_uuid)
-        second = resolver.resolve(connection, hardware_uuid)
-
-        self.assertEqual(first, device_uuid)
-        self.assertEqual(second, device_uuid)
-        self.assertEqual(len(connection.executed), 1)
-
-    def test_rejects_missing_device(self):
-        connection = FakeConnection(rows=[None])
-        resolver = DeviceResolver()
-
-        with self.assertRaises(DeviceResolutionError):
-            resolver.resolve(connection, DEFAULT_HARDWARE_UUID)
-
-    def test_skips_inactivated_device(self):
-        hardware_uuid = "b0fee3a6-ae91-4265-9365-36f793f32f06"
-        device_uuid = str(UUID("fe0a2a2e-3222-45ef-91e5-e285ccbe70a2"))
-        connection = FakeConnection(rows=[(device_uuid, "INACTIVATED")])
-        resolver = DeviceResolver()
-
-        with self.assertLogs("sensorhub_mock_sensor", level="WARNING") as logs:
-            resolved = resolver.resolve(connection, hardware_uuid)
-
-        self.assertIsNone(resolved)
-        self.assertEqual(resolver.cache, {})
-        self.assertIn("will not be simulated", logs.output[0])
-
-    def test_returns_empty_map_when_no_active_devices_are_available(self):
-        hardware_uuid = "b0fee3a6-ae91-4265-9365-36f793f32f06"
-        device_uuid = str(UUID("fe0a2a2e-3222-45ef-91e5-e285ccbe70a2"))
-        connection = FakeConnection(rows=[(device_uuid, "INACTIVATED")])
-        resolver = DeviceResolver()
-
-        with self.assertLogs("sensorhub_mock_sensor", level="WARNING"):
-            resolved = resolver.resolve_all(connection, (hardware_uuid,))
-
-        self.assertEqual(resolved, {})
-
-    def test_resolve_all_keeps_active_devices_when_some_are_inactivated(self):
-        active_hardware_uuid = "b0fee3a6-ae91-4265-9365-36f793f32f06"
-        inactive_hardware_uuid = "44dc9ffd-b376-4ceb-8f80-f7c7be550a4f"
-        active_device_uuid = str(UUID("fe0a2a2e-3222-45ef-91e5-e285ccbe70a2"))
-        inactive_device_uuid = str(UUID("3858f268-0281-462a-a965-e0ef76447ea0"))
-        connection = FakeConnection(
-            rows=[
-                (active_device_uuid, "ACTIVATED"),
-                (inactive_device_uuid, "INACTIVATED"),
-            ]
-        )
-        resolver = DeviceResolver()
-
-        with self.assertLogs("sensorhub_mock_sensor", level="WARNING"):
-            resolved = resolver.resolve_all(
-                connection,
-                (active_hardware_uuid, inactive_hardware_uuid),
-            )
-
-        self.assertEqual(resolved, {active_hardware_uuid: active_device_uuid})
-
-
-class MeasurementRepositoryTest(unittest.TestCase):
-    def test_inserts_measurement_in_one_transaction(self):
-        connection = FakeConnection(rows=[("ACTIVATED",)])
-        repository = MeasurementRepository()
-        measurement = Measurement(
-            temperature=23.45,
-            humidity=67.89,
-            measured_at="2026-06-04T10:00:00Z",
-        )
-        device_uuid = "fe0a2a2e-3222-45ef-91e5-e285ccbe70a2"
-
-        inserted = repository.insert(connection, device_uuid, measurement)
-
-        self.assertTrue(inserted)
-        self.assertEqual(connection.commits, 1)
-        self.assertEqual(connection.rollbacks, 0)
-        self.assertEqual(len(connection.executed), 2)
-        status_sql, status_params = connection.executed[0]
-        insert_sql, insert_params = connection.executed[1]
-        self.assertIn("SELECT status FROM devices", status_sql)
-        self.assertEqual(status_params[0], device_uuid)
-        self.assertIn("INSERT INTO measurements", insert_sql)
-        self.assertEqual(insert_params[0], device_uuid)
-        self.assertEqual(insert_params[1], 23.45)
-        self.assertEqual(insert_params[2], "CELSIUS")
-        self.assertEqual(insert_params[3], 67.89)
-        self.assertEqual(insert_params[4], "RELATIVE_PERCENT")
-
-    def test_skips_measurement_when_device_is_not_activated(self):
-        connection = FakeConnection(rows=[("INACTIVATED",)])
-        repository = MeasurementRepository()
-        measurement = Measurement(
-            temperature=23.45,
-            humidity=67.89,
-            measured_at="2026-06-04T10:00:00Z",
+class PayloadTest(unittest.TestCase):
+    def test_builds_sensor_payload_without_internal_fields(self):
+        payload = build_payload(
+            DEFAULT_HARDWARE_UUID,
+            Measurement(
+                temperature=23.45,
+                humidity=67.89,
+                measured_at=datetime(2026, 6, 4, 10, 0, tzinfo=timezone.utc),
+            ),
         )
 
-        inserted = repository.insert(
-            connection,
-            "fe0a2a2e-3222-45ef-91e5-e285ccbe70a2",
-            measurement,
+        decoded = json.loads(payload)
+
+        self.assertEqual(decoded["hardwareUuid"], DEFAULT_HARDWARE_UUID)
+        self.assertEqual(decoded["temperature"], 23.45)
+        self.assertEqual(decoded["temperatureUnit"], "CELSIUS")
+        self.assertEqual(decoded["humidity"], 67.89)
+        self.assertEqual(decoded["humidityUnit"], "RELATIVE_PERCENT")
+        self.assertEqual(decoded["measuredAt"], "2026-06-04T10:00:00Z")
+        self.assertNotIn("deviceUuid", decoded)
+        self.assertNotIn("receivedAt", decoded)
+
+
+class RunnerTest(unittest.TestCase):
+    def test_publishes_measurement_to_configured_topic(self):
+        config = read_config(
+            {
+                "SENSORHUB_HARDWARE_UUIDS": DEFAULT_HARDWARE_UUID,
+                "SENSORHUB_MQTT_TOPIC": "sensorhub/test",
+                "SENSORHUB_MQTT_QOS": "1",
+            }
         )
+        publisher = FakePublisher()
 
-        self.assertFalse(inserted)
-        self.assertEqual(connection.commits, 0)
-        self.assertEqual(connection.rollbacks, 1)
-        self.assertEqual(len(connection.executed), 1)
-
-    def test_rolls_back_on_insert_failure(self):
-        connection = FakeConnection(raise_on_execute=True)
-        repository = MeasurementRepository()
-        measurement = Measurement(
-            temperature=23.45,
-            humidity=67.89,
-            measured_at="2026-06-04T10:00:00Z",
+        runner = MockSensorRunner(
+            config,
+            publisher_factory=lambda mqtt: publisher,
+            sleep=lambda interval: runner.stop(),
         )
+        runner.run_forever()
 
-        with self.assertRaises(RuntimeError):
-            repository.insert(connection, "device-1", measurement)
-
-        self.assertEqual(connection.commits, 0)
-        self.assertEqual(connection.rollbacks, 1)
-
-
-class FakeConnection:
-    def __init__(self, rows=None, raise_on_execute=False):
-        self.rows = list(rows or [])
-        self.raise_on_execute = raise_on_execute
-        self.executed = []
-        self.commits = 0
-        self.rollbacks = 0
-
-    def cursor(self):
-        return FakeCursor(self)
-
-    def commit(self):
-        self.commits += 1
-
-    def rollback(self):
-        self.rollbacks += 1
+        self.assertEqual(len(publisher.published), 1)
+        topic, payload, qos = publisher.published[0]
+        decoded = json.loads(payload)
+        self.assertEqual(topic, "sensorhub/test")
+        self.assertEqual(qos, 1)
+        self.assertEqual(decoded["hardwareUuid"], DEFAULT_HARDWARE_UUID)
+        self.assertTrue(publisher.closed)
 
 
-class FakeCursor:
-    def __init__(self, connection):
-        self.connection = connection
+class FakePublisher:
+    def __init__(self):
+        self.published = []
+        self.closed = False
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc, traceback):
-        return False
+        self.closed = True
 
-    def execute(self, sql, params):
-        if self.connection.raise_on_execute:
-            raise RuntimeError("database error")
-        self.connection.executed.append((" ".join(sql.split()), params))
-
-    def fetchone(self):
-        if not self.connection.rows:
-            return None
-        return self.connection.rows.pop(0)
+    def publish(self, topic, payload, qos):
+        self.published.append((topic, payload, qos))
 
 
 if __name__ == "__main__":

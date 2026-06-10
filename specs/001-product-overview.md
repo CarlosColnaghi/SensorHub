@@ -15,7 +15,9 @@ Incluído na primeira fase:
 - Especificação do JSON produzido pelos sensores.
 - Especificação dos domínios principais, atributos, tabelas e relacionamentos.
 - Banco de dados PostgreSQL.
-- Script Python para simular sensores e persistir medições no PostgreSQL.
+- Broker MQTT para desenvolvimento local.
+- Script Python para simular sensores e publicar medições via MQTT.
+- Worker MQTT em Java 25 para consumir telemetria e persistir medições no PostgreSQL.
 - API em Java 25 com Spring Boot, JPA e Flyway.
 - Aplicativo Flutter para cadastrar dispositivos, associar ambientes e visualizar medições.
 - Docker Compose para executar os serviços criados e suas dependências.
@@ -23,8 +25,6 @@ Incluído na primeira fase:
 Fora da primeira fase:
 
 - Firmware ou integração com sensor físico real.
-- Broker MQTT real.
-- Worker MQTT em Java puro.
 - Alertas push.
 - Controle remoto de dispositivos.
 - Automações.
@@ -37,34 +37,38 @@ Fora da primeira fase:
 - Aplicativo mobile: Flutter.
 - API/backend: Java 25, Spring Boot, JPA e Flyway.
 - Banco de dados: PostgreSQL.
+- Broker MQTT local: Eclipse Mosquitto.
 - Simulador de sensores: Python.
+- Worker MQTT: Java 25, com uso mínimo de frameworks.
 - Execução local e integração entre serviços: Docker Compose.
-- Worker MQTT futuro: Java puro, com uso mínimo de frameworks.
 
 ## Usuários e sistemas envolvidos
 
 - Usuário final: cadastra dispositivos, organiza ambientes e consulta medições.
-- Simulador Python: gera leituras mockadas de sensores e persiste dados no PostgreSQL na primeira fase.
+- Simulador Python: gera leituras mockadas de sensores e publica mensagens MQTT.
+- Broker MQTT: transporta mensagens de telemetria entre simulador ou sensores físicos e o worker.
 - API: expõe dados e operações para o aplicativo mobile.
 - Banco de dados: armazena ambientes, dispositivos e medições.
 - App mobile: interface principal do usuário.
 - Dispositivo físico: publicará leituras de sensores via MQTT em fase futura.
-- Worker MQTT: consumirá mensagens MQTT e persistirá medições em fase futura.
+- Worker MQTT: consome mensagens MQTT, valida payloads e persiste medições.
 
 ## Fluxo da primeira fase
 
 1. A estrutura de dados dos sensores é especificada em JSON.
 2. Os domínios, atributos, tabelas e relacionamentos são definidos.
 3. O PostgreSQL é configurado no Docker Compose.
-4. O script Python gera leituras simuladas de temperatura e umidade.
-5. O script Python persiste as medições no PostgreSQL.
-6. A API consulta e gerencia os dados persistidos.
-7. O app Flutter consome a API para exibir leitura atual e histórico.
+4. O broker MQTT é configurado no Docker Compose.
+5. O script Python gera leituras simuladas de temperatura e umidade.
+6. O script Python publica as leituras no broker MQTT.
+7. O worker MQTT consome as mensagens e persiste as medições no PostgreSQL.
+8. A API consulta e gerencia os dados persistidos.
+9. O app Flutter consome a API para exibir leitura atual e histórico.
 
-## Fluxo futuro com MQTT
+## Fluxo de ingestão com MQTT
 
-1. O dispositivo físico publica uma leitura MQTT contendo seu UUID, temperatura, umidade e timestamp.
-2. O worker MQTT em Java puro consome a mensagem.
+1. O simulador Python ou um dispositivo físico publica uma leitura MQTT contendo seu UUID, temperatura, umidade e timestamp.
+2. O worker MQTT em Java 25 consome a mensagem.
 3. O worker valida o payload, identifica o dispositivo e normaliza os dados quando necessário.
 4. Leituras válidas são armazenadas no PostgreSQL.
 5. A API consulta os dados persistidos.
@@ -72,7 +76,7 @@ Fora da primeira fase:
 
 ## Contrato inicial do sensor
 
-O JSON abaixo representa o formato inicial esperado para leituras de sensores. Na primeira fase, ele será produzido pelo simulador Python. Em fase futura, servirá como base para o payload MQTT.
+O JSON abaixo representa o formato inicial esperado para leituras de sensores publicadas via MQTT. Na primeira fase, ele será produzido pelo simulador Python. Em fase futura, o mesmo contrato servirá como base para sensores físicos.
 
 ```json
 {
@@ -211,8 +215,9 @@ Relacionamentos:
 - Existe uma especificação clara do JSON de leitura do sensor.
 - Existem definições iniciais de domínios, atributos, tabelas e relacionamentos.
 - PostgreSQL sobe via Docker Compose.
-- Script Python gera medições simuladas.
-- Script Python persiste medições no PostgreSQL.
+- Broker MQTT sobe via Docker Compose.
+- Script Python gera medições simuladas e publica via MQTT.
+- Worker MQTT consome mensagens e persiste medições no PostgreSQL.
 - API Java 25/Spring Boot consulta os dados persistidos.
 - API possui migrations iniciais com Flyway.
 - App Flutter consegue cadastrar dispositivo por UUID.
@@ -226,6 +231,4 @@ Relacionamentos:
 - Estratégia de autenticação.
 - Estratégia de deploy em produção.
 - Política para dispositivos que enviam dados antes de serem cadastrados pelo usuário.
-- Broker MQTT que será usado na fase futura.
-- Formato final dos tópicos MQTT.
 - Detalhes de firmware ou hardware físico.

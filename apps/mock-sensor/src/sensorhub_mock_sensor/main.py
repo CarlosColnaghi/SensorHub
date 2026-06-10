@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 import random
@@ -8,7 +9,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Callable
+from typing import Callable, Protocol
 from uuid import UUID
 
 
@@ -23,17 +24,13 @@ class ConfigError(ValueError):
     """Raised when environment configuration is invalid."""
 
 
-class DeviceResolutionError(RuntimeError):
-    """Raised when a hardware UUID cannot be mapped to a device."""
-
-
 @dataclass(frozen=True)
-class DbConfig:
+class MqttConfig:
     host: str
     port: int
-    name: str
-    user: str
-    password: str
+    topic: str
+    client_id: str
+    qos: int
 
 
 @dataclass(frozen=True)
@@ -51,7 +48,7 @@ class ValueRange:
 
 @dataclass(frozen=True)
 class MockSensorConfig:
-    db: DbConfig
+    mqtt: MqttConfig
     hardware_uuids: tuple[str, ...]
     interval_seconds: float
     temperature: ValueRange
@@ -65,15 +62,30 @@ class Measurement:
     measured_at: datetime
 
 
+class Publisher(Protocol):
+    def __enter__(self) -> Publisher:
+        ...
+
+    def __exit__(self, exc_type, exc, traceback) -> None:
+        ...
+
+    def publish(self, topic: str, payload: str, qos: int) -> None:
+        ...
+
+
 def read_config(environ: dict[str, str] | None = None) -> MockSensorConfig:
     values = environ if environ is not None else os.environ
     interval_seconds = _read_float(values, "SENSORHUB_MEASUREMENT_INTERVAL_SECONDS", 5.0)
     if interval_seconds <= 0:
         raise ConfigError("SENSORHUB_MEASUREMENT_INTERVAL_SECONDS must be greater than zero")
 
-    db_port = _read_int(values, "SENSORHUB_DB_PORT", 5432)
-    if db_port <= 0:
-        raise ConfigError("SENSORHUB_DB_PORT must be greater than zero")
+    mqtt_port = _read_int(values, "SENSORHUB_MQTT_PORT", 1883)
+    if mqtt_port <= 0:
+        raise ConfigError("SENSORHUB_MQTT_PORT must be greater than zero")
+
+    mqtt_qos = _read_int(values, "SENSORHUB_MQTT_QOS", 0)
+    if mqtt_qos not in (0, 1, 2):
+        raise ConfigError("SENSORHUB_MQTT_QOS must be 0, 1, or 2")
 
     temperature = ValueRange(
         _read_float(values, "SENSORHUB_TEMPERATURE_MIN", 18.0),
@@ -89,12 +101,12 @@ def read_config(environ: dict[str, str] | None = None) -> MockSensorConfig:
     humidity.validate("humidity")
 
     return MockSensorConfig(
-        db=DbConfig(
-            host=values.get("SENSORHUB_DB_HOST", "postgres"),
-            port=db_port,
-            name=values.get("SENSORHUB_DB_NAME", "sensorhub"),
-            user=values.get("SENSORHUB_DB_USER", "sensorhub"),
-            password=values.get("SENSORHUB_DB_PASSWORD", "sensorhub"),
+        mqtt=MqttConfig(
+            host=values.get("SENSORHUB_MQTT_HOST", "mqtt"),
+            port=mqtt_port,
+            topic=values.get("SENSORHUB_MQTT_TOPIC", "sensorhub/telemetry"),
+            client_id=values.get("SENSORHUB_MQTT_CLIENT_ID", "sensorhub-mock-sensor"),
+            qos=mqtt_qos,
         ),
         hardware_uuids=parse_hardware_uuids(
             values.get("SENSORHUB_HARDWARE_UUIDS", DEFAULT_HARDWARE_UUID)
@@ -125,65 +137,31 @@ def parse_hardware_uuids(raw_value: str) -> tuple[str, ...]:
     return tuple(parsed)
 
 
-def connect(db: DbConfig):
-    import psycopg
+def connect_mqtt(config: MqttConfig) -> Publisher:
+    import paho.mqtt.client as mqtt
 
-    return psycopg.connect(
-        host=db.host,
-        port=db.port,
-        dbname=db.name,
-        user=db.user,
-        password=db.password,
-    )
+    client = mqtt.Client(client_id=config.client_id)
+    client.connect(config.host, config.port, keepalive=60)
+    client.loop_start()
+    return PahoMqttPublisher(client)
 
 
-class DeviceResolver:
-    def __init__(self) -> None:
-        self.cache: dict[str, str] = {}
-        self.last_status_by_hardware_uuid: dict[str, str] = {}
+class PahoMqttPublisher:
+    def __init__(self, client) -> None:
+        self.client = client
 
-    def resolve(self, connection, hardware_uuid: str) -> str | None:
-        if hardware_uuid in self.cache:
-            return self.cache[hardware_uuid]
+    def __enter__(self) -> PahoMqttPublisher:
+        return self
 
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT uuid, status
-                FROM devices
-                WHERE hardware_uuid = %s
-                """,
-                (hardware_uuid,),
-            )
-            row = cursor.fetchone()
+    def __exit__(self, exc_type, exc, traceback) -> None:
+        self.client.loop_stop()
+        self.client.disconnect()
 
-        if row is None:
-            raise DeviceResolutionError(f"hardware UUID {hardware_uuid} was not found")
-
-        status = row[1]
-        if status != "ACTIVATED":
-            if self.last_status_by_hardware_uuid.get(hardware_uuid) != status:
-                LOGGER.warning(
-                    "hardware UUID %s has status %s and will not be simulated",
-                    hardware_uuid,
-                    status,
-                )
-            self.last_status_by_hardware_uuid[hardware_uuid] = status
-            self.cache.pop(hardware_uuid, None)
-            return None
-
-        device_uuid = str(row[0])
-        self.last_status_by_hardware_uuid[hardware_uuid] = status
-        self.cache[hardware_uuid] = device_uuid
-        return device_uuid
-
-    def forget(self, hardware_uuid: str) -> None:
-        self.cache.pop(hardware_uuid, None)
-
-    def resolve_all(self, connection, hardware_uuids: tuple[str, ...]) -> dict[str, str]:
-        for hardware_uuid in hardware_uuids:
-            self.resolve(connection, hardware_uuid)
-        return dict(self.cache)
+    def publish(self, topic: str, payload: str, qos: int) -> None:
+        result = self.client.publish(topic, payload=payload, qos=qos)
+        result.wait_for_publish()
+        if result.rc != 0:
+            raise RuntimeError(f"MQTT publish failed with rc={result.rc}")
 
 
 class MeasurementGenerator:
@@ -196,20 +174,20 @@ class MeasurementGenerator:
         self.temperature_range = temperature_range
         self.humidity_range = humidity_range
         self.random = random_source or random.Random()
-        self._last_temperature_by_device: dict[str, float] = {}
-        self._last_humidity_by_device: dict[str, float] = {}
+        self._last_temperature_by_hardware_uuid: dict[str, float] = {}
+        self._last_humidity_by_hardware_uuid: dict[str, float] = {}
 
-    def next_measurement(self, device_uuid: str) -> Measurement:
+    def next_measurement(self, hardware_uuid: str) -> Measurement:
         temperature = self._next_value(
             self.temperature_range,
-            self._last_temperature_by_device.get(device_uuid),
+            self._last_temperature_by_hardware_uuid.get(hardware_uuid),
         )
         humidity = self._next_value(
             self.humidity_range,
-            self._last_humidity_by_device.get(device_uuid),
+            self._last_humidity_by_hardware_uuid.get(hardware_uuid),
         )
-        self._last_temperature_by_device[device_uuid] = temperature
-        self._last_humidity_by_device[device_uuid] = humidity
+        self._last_temperature_by_hardware_uuid[hardware_uuid] = temperature
+        self._last_humidity_by_hardware_uuid[hardware_uuid] = humidity
 
         return Measurement(
             temperature=temperature,
@@ -228,105 +206,64 @@ class MeasurementGenerator:
         return _round_two(value)
 
 
-class MeasurementRepository:
-    def insert(self, connection, device_uuid: str, measurement: Measurement) -> bool:
-        try:
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    SELECT status
-                    FROM devices
-                    WHERE uuid = %s
-                    """,
-                    (device_uuid,),
-                )
-                row = cursor.fetchone()
-                if row is None or row[0] != "ACTIVATED":
-                    connection.rollback()
-                    return False
-
-                cursor.execute(
-                    """
-                    INSERT INTO measurements (
-                        device_uuid,
-                        temperature,
-                        temperature_unit,
-                        humidity,
-                        humidity_unit,
-                        measured_at,
-                        received_at
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    """,
-                    (
-                        device_uuid,
-                        measurement.temperature,
-                        TEMPERATURE_UNIT,
-                        measurement.humidity,
-                        HUMIDITY_UNIT,
-                        measurement.measured_at,
-                        measurement.measured_at,
-                    ),
-                )
-            connection.commit()
-            return True
-        except Exception:
-            connection.rollback()
-            raise
+def build_payload(hardware_uuid: str, measurement: Measurement) -> str:
+    return json.dumps(
+        {
+            "hardwareUuid": hardware_uuid,
+            "temperature": measurement.temperature,
+            "temperatureUnit": TEMPERATURE_UNIT,
+            "humidity": measurement.humidity,
+            "humidityUnit": HUMIDITY_UNIT,
+            "measuredAt": _format_instant(measurement.measured_at),
+        },
+        separators=(",", ":"),
+    )
 
 
 class MockSensorRunner:
     def __init__(
         self,
         config: MockSensorConfig,
-        connection_factory: Callable[[DbConfig], object] = connect,
+        publisher_factory: Callable[[MqttConfig], Publisher] = connect_mqtt,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self.config = config
-        self.connection_factory = connection_factory
+        self.publisher_factory = publisher_factory
         self.sleep = sleep
-        self.resolver = DeviceResolver()
         self.generator = MeasurementGenerator(config.temperature, config.humidity)
-        self.repository = MeasurementRepository()
         self.running = True
 
     def stop(self, signum=None, frame=None) -> None:
         self.running = False
 
     def run_forever(self) -> None:
-        with self.connection_factory(self.config.db) as connection:
-            last_logged_device_count: int | None = None
-
+        with self.publisher_factory(self.config.mqtt) as publisher:
+            LOGGER.info(
+                "publishing telemetry to mqtt://%s:%s topic=%s devices=%s",
+                self.config.mqtt.host,
+                self.config.mqtt.port,
+                self.config.mqtt.topic,
+                len(self.config.hardware_uuids),
+            )
             while self.running:
-                device_map = self.resolver.resolve_all(connection, self.config.hardware_uuids)
-                if len(device_map) != last_logged_device_count:
-                    if device_map:
-                        LOGGER.info("resolved %s active device(s)", len(device_map))
-                    else:
-                        LOGGER.warning("no ACTIVATED devices available for simulation")
-                    last_logged_device_count = len(device_map)
-
-                for hardware_uuid, device_uuid in device_map.items():
-                    measurement = self.generator.next_measurement(device_uuid)
+                for hardware_uuid in self.config.hardware_uuids:
+                    measurement = self.generator.next_measurement(hardware_uuid)
+                    payload = build_payload(hardware_uuid, measurement)
                     try:
-                        inserted = self.repository.insert(connection, device_uuid, measurement)
-                        if inserted:
-                            LOGGER.info(
-                                "inserted measurement hardware_uuid=%s device_uuid=%s temperature=%.2f humidity=%.2f",
-                                hardware_uuid,
-                                device_uuid,
-                                measurement.temperature,
-                                measurement.humidity,
-                            )
-                        else:
-                            self.resolver.forget(hardware_uuid)
-                            LOGGER.warning(
-                                "skipped measurement hardware_uuid=%s device_uuid=%s because device is not activated",
-                                hardware_uuid,
-                                device_uuid,
-                            )
+                        publisher.publish(
+                            self.config.mqtt.topic,
+                            payload,
+                            self.config.mqtt.qos,
+                        )
+                        LOGGER.info(
+                            "published measurement hardware_uuid=%s temperature=%.2f humidity=%.2f",
+                            hardware_uuid,
+                            measurement.temperature,
+                            measurement.humidity,
+                        )
                     except Exception:
                         LOGGER.exception(
-                            "failed to insert measurement for hardware_uuid=%s",
+                            "failed to publish measurement for hardware_uuid=%s",
                             hardware_uuid,
                         )
 
@@ -350,7 +287,7 @@ def main() -> int:
         signal.signal(signal.SIGINT, runner.stop)
         runner.run_forever()
         return 0
-    except (ConfigError, DeviceResolutionError) as exc:
+    except ConfigError as exc:
         LOGGER.error("%s", exc)
         return 1
     except Exception:
@@ -380,6 +317,10 @@ def _read_int(values: dict[str, str], key: str, default: int) -> int:
 
 def _round_two(value: float) -> float:
     return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
+def _format_instant(value: datetime) -> str:
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 if __name__ == "__main__":

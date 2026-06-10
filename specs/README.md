@@ -8,8 +8,9 @@ Use specs para transformar ideias em trabalho implementável. Cada spec deve ser
 
 - `001-product-overview.md`: visão geral do produto e escopo inicial.
 - `002-api.md`: domínio, persistência, migrations e contratos iniciais da API.
-- `003-mock-sensor.md`: script Python para gerar medições simuladas no PostgreSQL.
+- `003-mock-sensor.md`: script Python para publicar medições simuladas via MQTT.
 - `004-mobile-app.md`: aplicativo Flutter com dark mode, cards de sensores, detalhes, gráficos e cadastros.
+- `005-worker.md`: worker Java para consumir MQTT e persistir medições no PostgreSQL.
 
 ## Template
 

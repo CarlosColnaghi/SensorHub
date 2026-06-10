@@ -16,6 +16,15 @@ services:
       timeout: 5s
       retries: 5
 
+  mqtt:
+    image: eclipse-mosquitto:2.0
+    container_name: sensorhub-mqtt
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./infra/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mqtt_data:/mosquitto/data
+
   api:
     build:
       context: ./apps/api
@@ -37,11 +46,11 @@ services:
     container_name: sensorhub-mock-sensor
     restart: on-failure
     environment:
-      SENSORHUB_DB_HOST: postgres
-      SENSORHUB_DB_PORT: 5432
-      SENSORHUB_DB_NAME: sensorhub
-      SENSORHUB_DB_USER: sensorhub
-      SENSORHUB_DB_PASSWORD: sensorhub
+      SENSORHUB_MQTT_HOST: mqtt
+      SENSORHUB_MQTT_PORT: 1883
+      SENSORHUB_MQTT_TOPIC: sensorhub/telemetry
+      SENSORHUB_MQTT_CLIENT_ID: sensorhub-mock-sensor
+      SENSORHUB_MQTT_QOS: 0
       SENSORHUB_HARDWARE_UUIDS: b0fee3a6-ae91-4265-9365-36f793f32f06
       SENSORHUB_MEASUREMENT_INTERVAL_SECONDS: 5
       SENSORHUB_TEMPERATURE_MIN: 18.0
@@ -51,9 +60,7 @@ services:
       SENSORHUB_HUMIDITY_MAX: 80.0
       SENSORHUB_HUMIDITY_STEP_MAX: 1.5
     depends_on:
-      postgres:
-        condition: service_healthy
-      api:
+      mqtt:
         condition: service_started
 
   mobile:
@@ -70,3 +77,4 @@ services:
 
 volumes:
   postgres_data:
+  mqtt_data:
