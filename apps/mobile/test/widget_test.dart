@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sensorhub_mobile/main.dart';
 import 'package:sensorhub_mobile/src/api/sensorhub_repository.dart';
 import 'package:sensorhub_mobile/src/models/sensorhub_models.dart';
+import 'package:sensorhub_mobile/src/state/sensorhub_controller.dart';
 import 'package:sensorhub_mobile/src/widgets/measurement_chart.dart';
 
 void main() {
@@ -122,12 +123,70 @@ void main() {
     expect(find.byIcon(Icons.play_circle), findsOneWidget);
     expect(find.text('Inativar dispositivo'), findsNothing);
   });
+
+  testWidgets('detail screen refreshes latest measurement while polling', (
+    tester,
+  ) async {
+    final repository = FakeSensorHubDataSource(
+      overviewTemperatures: const [24.7, 25.8],
+      overviewHumidities: const [58.2, 61.4],
+    );
+    await tester.pumpWidget(
+      SensorHubApp(repository: repository, enablePolling: true),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sensor da sala'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('24.7 °C'), findsWidgets);
+    expect(find.text('58.2 %'), findsWidgets);
+
+    await tester.pump(SensorHubController.pollInterval);
+    await tester.pumpAndSettle();
+
+    expect(find.text('25.8 °C'), findsOneWidget);
+    expect(find.text('61.4 %'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('detail screen pull-to-refresh updates latest measurement', (
+    tester,
+  ) async {
+    final repository = FakeSensorHubDataSource(
+      overviewTemperatures: const [24.7, 26.1],
+      overviewHumidities: const [58.2, 62.5],
+    );
+    await tester.pumpWidget(
+      SensorHubApp(repository: repository, enablePolling: false),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sensor da sala'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('24.7 °C'), findsWidgets);
+    expect(find.text('58.2 %'), findsWidgets);
+
+    await tester.drag(find.byType(Scrollable).last, const Offset(0, 500));
+    await tester.pumpAndSettle();
+
+    expect(find.text('26.1 °C'), findsOneWidget);
+    expect(find.text('62.5 %'), findsOneWidget);
+  });
 }
 
 class FakeSensorHubDataSource implements SensorHubDataSource {
-  FakeSensorHubDataSource({this.deviceStatus = 'ACTIVATED'});
+  FakeSensorHubDataSource({
+    this.deviceStatus = 'ACTIVATED',
+    this.overviewTemperatures = const [24.7],
+    this.overviewHumidities = const [58.2],
+  });
 
   final String deviceStatus;
+  final List<double> overviewTemperatures;
+  final List<double> overviewHumidities;
 
   static const user = AppUser(
     uuid: '11111111-1111-4111-8111-111111111111',
@@ -138,6 +197,7 @@ class FakeSensorHubDataSource implements SensorHubDataSource {
   static const deviceUuid = '22222222-2222-4222-8222-222222222222';
   static const environmentUuid = '33333333-3333-4333-8333-333333333333';
   int deletedDeviceCount = 0;
+  int overviewLoadCount = 0;
 
   @override
   Future<AppUser> loadCurrentUser() async => user;
@@ -283,41 +343,53 @@ class FakeSensorHubDataSource implements SensorHubDataSource {
     required DateTime to,
     required String bucket,
   }) async {
+    final readingIndex = overviewLoadCount < overviewTemperatures.length
+        ? overviewLoadCount
+        : overviewTemperatures.length - 1;
+    overviewLoadCount += 1;
+    final temperature = overviewTemperatures[readingIndex];
+    final humidity = overviewHumidities[readingIndex];
+    final measuredAt = DateTime(2026, 6, 4, 18, 15);
+    final previousMeasuredAt = DateTime(2026, 6, 4, 18, 10);
+    final temperatureMax = temperature >= 24.5 ? temperature : 24.5;
+    final temperatureMin = temperature < 24.5 ? temperature : 24.5;
+    final humidityMax = humidity >= 59.1 ? humidity : 59.1;
+    final humidityMin = humidity < 59.1 ? humidity : 59.1;
     return MeasurementOverview(
       deviceUuid: deviceUuid,
       freshnessStatus: 'ONLINE',
-      lastSeenAt: DateTime(2026, 6, 4, 18, 15),
+      lastSeenAt: measuredAt,
       period: OverviewPeriod(from: from, to: to, bucket: bucket),
       latestMeasurement: LatestMeasurement(
-        temperature: 24.7,
+        temperature: temperature,
         temperatureUnit: 'CELSIUS',
-        humidity: 58.2,
+        humidity: humidity,
         humidityUnit: 'RELATIVE_PERCENT',
-        measuredAt: DateTime(2026, 6, 4, 18, 15),
+        measuredAt: measuredAt,
       ),
       series: [
         SeriesPoint(
-          timestamp: DateTime(2026, 6, 4, 18, 10),
+          timestamp: previousMeasuredAt,
           temperature: 24.5,
           humidity: 59.1,
         ),
         SeriesPoint(
-          timestamp: DateTime(2026, 6, 4, 18, 15),
-          temperature: 24.7,
-          humidity: 58.2,
+          timestamp: measuredAt,
+          temperature: temperature,
+          humidity: humidity,
         ),
       ],
       overview: OverviewStats(
-        temperatureMax: 24.7,
-        temperatureMaxAt: DateTime(2026, 6, 4, 18, 15),
-        temperatureMin: 24.5,
-        temperatureMinAt: DateTime(2026, 6, 4, 18, 10),
-        temperatureAverage: 24.6,
-        humidityMax: 59.1,
-        humidityMaxAt: DateTime(2026, 6, 4, 18, 10),
-        humidityMin: 58.2,
-        humidityMinAt: DateTime(2026, 6, 4, 18, 15),
-        humidityAverage: 58.7,
+        temperatureMax: temperatureMax,
+        temperatureMaxAt: temperature >= 24.5 ? measuredAt : previousMeasuredAt,
+        temperatureMin: temperatureMin,
+        temperatureMinAt: temperature < 24.5 ? measuredAt : previousMeasuredAt,
+        temperatureAverage: (24.5 + temperature) / 2,
+        humidityMax: humidityMax,
+        humidityMaxAt: humidity >= 59.1 ? measuredAt : previousMeasuredAt,
+        humidityMin: humidityMin,
+        humidityMinAt: humidity < 59.1 ? measuredAt : previousMeasuredAt,
+        humidityAverage: (59.1 + humidity) / 2,
         measurementCount: 2,
       ),
     );

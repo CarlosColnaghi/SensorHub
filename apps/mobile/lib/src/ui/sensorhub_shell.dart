@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../models/sensorhub_models.dart';
@@ -45,6 +47,7 @@ class _SensorHubShellState extends State<SensorHubShell> {
         final pages = [
           HomeScreen(
             controller: controller,
+            enablePolling: widget.enablePolling,
             onOpenDevices: () => setState(() => _index = 1),
           ),
           DevicesScreen(controller: controller),
@@ -103,11 +106,13 @@ class _SensorHubShellState extends State<SensorHubShell> {
 class HomeScreen extends StatelessWidget {
   const HomeScreen({
     required this.controller,
+    required this.enablePolling,
     required this.onOpenDevices,
     super.key,
   });
 
   final SensorHubController controller;
+  final bool enablePolling;
   final VoidCallback onOpenDevices;
 
   @override
@@ -154,8 +159,11 @@ class HomeScreen extends StatelessWidget {
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
-                  builder: (_) =>
-                      SensorDetailScreen(controller: controller, card: card),
+                  builder: (_) => SensorDetailScreen(
+                    controller: controller,
+                    card: card,
+                    enablePolling: enablePolling,
+                  ),
                 ),
               );
             },
@@ -212,11 +220,13 @@ class SensorDetailScreen extends StatefulWidget {
   const SensorDetailScreen({
     required this.controller,
     required this.card,
+    required this.enablePolling,
     super.key,
   });
 
   final SensorHubController controller;
   final SensorCardData card;
+  final bool enablePolling;
 
   @override
   State<SensorDetailScreen> createState() => _SensorDetailScreenState();
@@ -224,56 +234,110 @@ class SensorDetailScreen extends StatefulWidget {
 
 class _SensorDetailScreenState extends State<SensorDetailScreen> {
   DetailPeriod _period = DetailPeriod.sixHours;
-  Future<MeasurementOverview>? _overviewFuture;
+  MeasurementOverview? _overview;
+  Object? _loadError;
+  bool _loading = true;
+  Timer? _refreshTimer;
+  bool _refreshing = false;
+  int _requestGeneration = 0;
 
   @override
   void initState() {
     super.initState();
     _load();
+    if (widget.enablePolling) {
+      _refreshTimer = Timer.periodic(
+        SensorHubController.pollInterval,
+        (_) => _refresh(),
+      );
+    }
   }
 
-  void _load() {
-    _overviewFuture = widget.controller.loadOverview(
-      deviceUuid: widget.card.device.deviceUuid,
-      period: _period,
-    );
+  Future<void> _load({bool keepCurrent = false}) async {
+    final generation = ++_requestGeneration;
+    final period = _period;
+    if (!keepCurrent && mounted) {
+      setState(() {
+        _loading = true;
+        _loadError = null;
+      });
+    }
+    try {
+      final overview = await widget.controller.loadOverview(
+        deviceUuid: widget.card.device.deviceUuid,
+        period: period,
+      );
+      if (!mounted || generation != _requestGeneration) {
+        return;
+      }
+      setState(() {
+        _overview = overview;
+        _loadError = null;
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted || generation != _requestGeneration) {
+        return;
+      }
+      setState(() {
+        _loadError = error;
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _refresh() async {
+    if (_refreshing || !mounted) {
+      return;
+    }
+    _refreshing = true;
+    try {
+      await _load(keepCurrent: true);
+    } finally {
+      _refreshing = false;
+    }
+  }
+
+  void _changePeriod(DetailPeriod period) {
+    if (_period == period) {
+      return;
+    }
+    setState(() => _period = period);
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final overview = _overview;
     return Scaffold(
       appBar: AppBar(title: Text(widget.card.title)),
-      body: FutureBuilder<MeasurementOverview>(
-        future: _overviewFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return LoadStateView(
-              icon: Icons.error_outline,
-              title: 'Não foi possível carregar o sensor',
-              message: snapshot.error.toString(),
-              action: FilledButton.icon(
-                onPressed: () => setState(_load),
-                icon: const Icon(Icons.refresh),
-                label: const Text('Tentar novamente'),
-              ),
-            );
-          }
-          final overview = snapshot.data!;
-          return ListView(
+      body: switch ((_loading, _loadError, overview)) {
+        (true, _, null) => const Center(child: CircularProgressIndicator()),
+        (false, final error?, null) => LoadStateView(
+          icon: Icons.error_outline,
+          title: 'Não foi possível carregar o sensor',
+          message: error.toString(),
+          action: FilledButton.icon(
+            onPressed: _load,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Tentar novamente'),
+          ),
+        ),
+        (_, _, final overview?) => RefreshIndicator(
+          onRefresh: () => _load(keepCurrent: true),
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
             children: [
               _DetailHeader(card: widget.card, overview: overview),
               const SizedBox(height: 12),
-              _PeriodSelector(
-                value: _period,
-                onChanged: (period) => setState(() {
-                  _period = period;
-                  _load();
-                }),
-              ),
+              _PeriodSelector(value: _period, onChanged: _changePeriod),
               const SizedBox(height: 12),
               MeasurementChart(
                 points: overview.series,
@@ -287,9 +351,10 @@ class _SensorDetailScreenState extends State<SensorDetailScreen> {
               const SizedBox(height: 12),
               _OverviewPanel(stats: overview.overview),
             ],
-          );
-        },
-      ),
+          ),
+        ),
+        _ => const Center(child: CircularProgressIndicator()),
+      },
     );
   }
 }
