@@ -12,7 +12,7 @@ PYTHONPATH=src python -m sensorhub_mock_sensor.main
 
 - `SENSORHUB_MQTT_HOST`: MQTT broker host. Default: `mqtt`.
 - `SENSORHUB_MQTT_PORT`: MQTT broker port. Default: `1883`.
-- `SENSORHUB_MQTT_TOPIC`: telemetry topic. Default: `sensorhub/telemetry`.
+- `SENSORHUB_MQTT_TOPIC`: telemetry topic. Default: `sensorhub/measurements`.
 - `SENSORHUB_MQTT_CLIENT_ID`: MQTT client id. Default: `sensorhub-mock-sensor`.
 - `SENSORHUB_MQTT_QOS`: MQTT publish QoS. Default: `0`.
 - `SENSORHUB_HARDWARE_UUIDS`: comma-separated hardware UUIDs. Default: `b0fee3a6-ae91-4265-9365-36f793f32f06`.

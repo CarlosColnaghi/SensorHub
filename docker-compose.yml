@@ -19,11 +19,22 @@ services:
   mqtt:
     image: eclipse-mosquitto:2.0
     container_name: sensorhub-mqtt
+    entrypoint: ["mosquitto"]
+    command: ["-c", "/mosquitto/config/mosquitto.conf"]
     ports:
       - "1883:1883"
+      - "9001:9001"
     volumes:
-      - ./infra/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-      - mqtt_data:/mosquitto/data
+      - ./infra/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro,Z
+
+  mqtt-ui:
+    image: emqx/mqttx-web:latest
+    container_name: sensorhub-mqtt-ui
+    ports:
+      - "8081:80"
+    depends_on:
+      mqtt:
+        condition: service_started
 
   api:
     build:
@@ -48,7 +59,7 @@ services:
     environment:
       SENSORHUB_MQTT_HOST: mqtt
       SENSORHUB_MQTT_PORT: 1883
-      SENSORHUB_MQTT_TOPIC: sensorhub/telemetry
+      SENSORHUB_MQTT_TOPIC: sensorhub/measurements
       SENSORHUB_MQTT_CLIENT_ID: sensorhub-mock-sensor
       SENSORHUB_MQTT_QOS: 0
       SENSORHUB_HARDWARE_UUIDS: b0fee3a6-ae91-4265-9365-36f793f32f06
@@ -63,18 +74,30 @@ services:
       mqtt:
         condition: service_started
 
-  mobile:
-    image: ghcr.io/cirruslabs/flutter:stable
-    container_name: sensorhub-mobile-check
-    working_dir: /workspace/apps/mobile
-    profiles:
-      - mobile
+  mqtt-ingestor:
+    build:
+      context: ./apps/mqtt-ingestor
+    container_name: sensorhub-mqtt-ingestor
+    restart: on-failure
     environment:
-      SENSORHUB_API_BASE_URL: http://api:8080
-    volumes:
-      - .:/workspace
-    command: flutter test
+      SENSORHUB_MQTT_HOST: mqtt
+      SENSORHUB_MQTT_PORT: 1883
+      SENSORHUB_MQTT_TOPIC: sensorhub/measurements
+      SENSORHUB_MQTT_CLIENT_ID: sensorhub-mqtt-ingestor
+      SENSORHUB_MQTT_QOS: 0
+      SENSORHUB_DB_HOST: postgres
+      SENSORHUB_DB_PORT: 5432
+      SENSORHUB_DB_NAME: sensorhub
+      SENSORHUB_DB_USER: sensorhub
+      SENSORHUB_DB_PASSWORD: sensorhub
+      SENSORHUB_DEVICE_CACHE_TTL_SECONDS: 300
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+      api:
+        condition: service_started
 
 volumes:
   postgres_data:
-  mqtt_data:

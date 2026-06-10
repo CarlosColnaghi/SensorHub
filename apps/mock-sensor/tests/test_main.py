@@ -27,7 +27,7 @@ class ConfigTest(unittest.TestCase):
 
         self.assertEqual(config.mqtt.host, "mqtt")
         self.assertEqual(config.mqtt.port, 1883)
-        self.assertEqual(config.mqtt.topic, "sensorhub/telemetry")
+        self.assertEqual(config.mqtt.topic, "sensorhub/measurements")
         self.assertEqual(config.mqtt.client_id, "sensorhub-mock-sensor")
         self.assertEqual(config.mqtt.qos, 0)
         self.assertEqual(config.hardware_uuids, (DEFAULT_HARDWARE_UUID,))

@@ -1,4 +1,4 @@
-# Worker MQTT
+# MQTT Ingestor
 
 ## Objetivo
 
@@ -54,7 +54,7 @@ Se uma mensagem for inválida, o worker deve registrar o erro e continuar consum
 Tópico padrão:
 
 ```text
-sensorhub/telemetry
+sensorhub/measurements
 ```
 
 O worker deve assinar esse tópico por padrão. A primeira versão usa um único tópico compartilhado por todos os dispositivos. A introdução de tópicos por dispositivo deve ser documentada em spec futura, se necessária.
@@ -96,7 +96,7 @@ Conexão MQTT:
 
 - `SENSORHUB_MQTT_HOST`: host do broker MQTT. Padrão sugerido: `mqtt`.
 - `SENSORHUB_MQTT_PORT`: porta do broker MQTT. Padrão sugerido: `1883`.
-- `SENSORHUB_MQTT_TOPIC`: tópico de telemetria. Padrão: `sensorhub/telemetry`.
+- `SENSORHUB_MQTT_TOPIC`: tópico de telemetria. Padrão: `sensorhub/measurements`.
 - `SENSORHUB_MQTT_CLIENT_ID`: identificador do consumidor MQTT. Padrão sugerido: `sensorhub-mqtt-ingestor`.
 - `SENSORHUB_MQTT_QOS`: QoS usado na assinatura. Padrão inicial: `0`.
 
@@ -198,7 +198,7 @@ INSERT INTO measurements (
 - Existe uma aplicação Java em `apps/mqtt-ingestor`.
 - A aplicação usa Java 25.
 - A aplicação conecta ao broker MQTT configurado.
-- A aplicação assina o tópico `sensorhub/telemetry` por padrão.
+- A aplicação assina o tópico `sensorhub/measurements` por padrão.
 - A aplicação valida o payload JSON de telemetria.
 - A aplicação resolve `hardwareUuid` para `devices.uuid`.
 - A aplicação ignora dispositivos inexistentes ou `INACTIVATED`.

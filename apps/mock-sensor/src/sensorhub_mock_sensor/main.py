@@ -104,7 +104,7 @@ def read_config(environ: dict[str, str] | None = None) -> MockSensorConfig:
         mqtt=MqttConfig(
             host=values.get("SENSORHUB_MQTT_HOST", "mqtt"),
             port=mqtt_port,
-            topic=values.get("SENSORHUB_MQTT_TOPIC", "sensorhub/telemetry"),
+            topic=values.get("SENSORHUB_MQTT_TOPIC", "sensorhub/measurements"),
             client_id=values.get("SENSORHUB_MQTT_CLIENT_ID", "sensorhub-mock-sensor"),
             qos=mqtt_qos,
         ),

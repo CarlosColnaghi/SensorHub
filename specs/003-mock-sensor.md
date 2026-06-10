@@ -54,7 +54,7 @@ O loop deve continuar até o processo ser interrompido.
 Tópico padrão:
 
 ```text
-sensorhub/telemetry
+sensorhub/measurements
 ```
 
 O tópico pode ser alterado por variável de ambiente. A primeira versão deve usar um único tópico compartilhado por todos os sensores simulados. Tópicos por dispositivo podem ser adicionados depois, se houver necessidade operacional.
@@ -91,7 +91,7 @@ Conexão MQTT:
 
 - `SENSORHUB_MQTT_HOST`: host do broker MQTT. Padrão sugerido: `mqtt`.
 - `SENSORHUB_MQTT_PORT`: porta do broker MQTT. Padrão sugerido: `1883`.
-- `SENSORHUB_MQTT_TOPIC`: tópico de telemetria. Padrão: `sensorhub/telemetry`.
+- `SENSORHUB_MQTT_TOPIC`: tópico de telemetria. Padrão: `sensorhub/measurements`.
 - `SENSORHUB_MQTT_CLIENT_ID`: identificador do cliente MQTT. Padrão sugerido: `sensorhub-mock-sensor`.
 - `SENSORHUB_MQTT_QOS`: QoS usado na publicação. Padrão inicial: `0`.
 
@@ -147,7 +147,7 @@ Umidade:
 - O script lê configuração por variáveis de ambiente.
 - O script aceita `SENSORHUB_HARDWARE_UUIDS` com um ou mais UUIDs separados por vírgula.
 - O script conecta ao broker MQTT configurado.
-- O script publica mensagens no tópico `sensorhub/telemetry` por padrão.
+- O script publica mensagens no tópico `sensorhub/measurements` por padrão.
 - O payload publicado segue o contrato JSON definido nesta spec.
 - O script não abre conexão com PostgreSQL.
 - O script gera temperatura e umidade dentro dos ranges configurados.
