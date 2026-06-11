@@ -23,7 +23,7 @@ class AppConfigTest {
         assertEquals("sensorhub", config.database().name());
         assertEquals("sensorhub", config.database().user());
         assertEquals("sensorhub", config.database().password());
-        assertEquals(Duration.ofSeconds(300), config.deviceCacheTtl());
+        assertEquals(Duration.ofSeconds(120), config.deviceCacheTtl());
     }
 
     @Test

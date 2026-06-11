@@ -98,7 +98,7 @@ A tela de dispositivos deve listar os dispositivos cadastrados do usuário e per
 - reativar o dispositivo, quando ele estiver inativado;
 - excluir o dispositivo.
 
-A inativação deve manter o dispositivo e seu histórico no sistema, mas marcar o dispositivo como indisponível para operação normal no app. Enquanto o dispositivo estiver inativado, seus dados não devem continuar sendo atualizados no dashboard do aplicativo pelo polling da tela inicial. A tela deve mostrar o estado inativado e preservar a última leitura conhecida apenas como dado histórico visual.
+A inativação deve manter o dispositivo e seu histórico no sistema, mas marcar o dispositivo como indisponível para operação normal no app. Enquanto o dispositivo estiver inativado, seus dados não devem continuar sendo atualizados no dashboard do aplicativo pelo polling da tela inicial nem na tela de detalhe do sensor. As telas devem mostrar o estado inativado e preservar a última leitura conhecida apenas como dado histórico visual.
 
 Quando um dispositivo estiver ativo, a ação administrativa deve aparecer como `Inativar dispositivo`. Quando o dispositivo já estiver inativado, essa ação deve mudar para `Reativar dispositivo` e usar um ícone de play. Ao reativar, o dashboard do app volta a atualizar os dados do dispositivo pelo polling normal.
 
@@ -242,6 +242,8 @@ Metadados estáveis do sensor devem vir de `GET /api/v1/devices/{deviceUuid}` ou
 
 Na tela de detalhe, `latestMeasurement` representa a leitura atual do dispositivo. `series` e `overview` representam o período selecionado pelo usuário.
 
+Quando o dispositivo estiver `INACTIVATED`, a tela de detalhe deve tratar as medições carregadas como histórico congelado: não deve iniciar polling periódico nem atualizar a leitura atual por pull-to-refresh. Se novas mensagens ainda chegarem por falha operacional ou atraso de ingestão, elas não devem alterar a leitura exibida automaticamente para o usuário enquanto o dispositivo permanecer inativado.
+
 Os gráficos da tela de detalhe devem permitir interação por toque ou arraste. Ao selecionar um ponto da linha, o app deve destacar o ponto mais próximo e exibir valor e horário correspondentes.
 
 O app não deve usar `GET /api/v1/devices/{deviceUuid}/measurements` para montar gráficos ou calcular overview. Esse endpoint paginado retorna medições brutas e deve ficar reservado para uma futura tela de histórico tabular, exportação ou depuração.
@@ -299,7 +301,7 @@ Exemplo de resposta esperada para o overview de medições:
 - O app deve permitir associar ou desassociar dispositivo de ambiente.
 - O app deve permitir editar, inativar e excluir dispositivos existentes.
 - O app deve permitir reativar dispositivos inativados.
-- Dispositivos inativados não devem continuar recebendo atualização de dados no dashboard do app.
+- Dispositivos inativados não devem continuar recebendo atualização de dados no dashboard nem na tela de detalhe do sensor.
 - O botão de ação administrativa deve alternar entre `Inativar dispositivo` e `Reativar dispositivo` conforme o status do dispositivo.
 - O botão `Reativar dispositivo` deve usar ícone de play.
 - O app deve exigir confirmação explícita antes de excluir um dispositivo.
@@ -343,7 +345,7 @@ Exemplo de resposta esperada para o overview de medições:
 - O app permite abrir um dispositivo cadastrado e editar seus dados.
 - O app permite inativar um dispositivo cadastrado.
 - O app permite reativar um dispositivo inativado usando botão com ícone de play.
-- O app deixa de atualizar dados de dispositivo inativado no dashboard.
+- O app deixa de atualizar dados de dispositivo inativado no dashboard e na tela de detalhe.
 - O app exibe confirmação antes de excluir um dispositivo e informa que a ação remove as medições e não pode ser revertida.
 - O app permite excluir dispositivo após confirmação bem-sucedida pela API.
 - O app permite cadastrar ambiente.
@@ -378,7 +380,7 @@ Exemplo de resposta esperada para o overview de medições:
 - Testar erro de `hardwareUuid` inválido ou duplicado.
 - Testar edição de dispositivo existente.
 - Testar inativação de dispositivo existente.
-- Testar que dispositivo inativado deixa de receber atualização de dados no dashboard.
+- Testar que dispositivo inativado deixa de receber atualização de dados no dashboard e na tela de detalhe.
 - Testar que dispositivo inativado exibe ação `Reativar dispositivo` com ícone de play.
 - Testar reativação de dispositivo inativado.
 - Testar pop-up de confirmação para exclusão de dispositivo.

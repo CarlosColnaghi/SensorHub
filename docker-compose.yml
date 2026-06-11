@@ -62,7 +62,7 @@ services:
       SENSORHUB_MQTT_TOPIC: sensorhub/measurements
       SENSORHUB_MQTT_CLIENT_ID: sensorhub-sensor
       SENSORHUB_MQTT_QOS: 0
-      SENSORHUB_HARDWARE_UUIDS: b0fee3a6-ae91-4265-9365-36f793f32f06,b23e32b4-53fc-4b47-bcf9-42b47f48d9be
+      SENSORHUB_HARDWARE_UUIDS: b0fee3a6-ae91-4265-9365-36f793f32f06,019eb43e-c22c-7357-87b2-ce0648daa6e5
       SENSORHUB_MEASUREMENT_INTERVAL_SECONDS: 5
       SENSORHUB_TEMPERATURE_MIN: 18.0
       SENSORHUB_TEMPERATURE_MAX: 32.0
@@ -90,7 +90,7 @@ services:
       SENSORHUB_DB_NAME: sensorhub
       SENSORHUB_DB_USER: sensorhub
       SENSORHUB_DB_PASSWORD: sensorhub
-      SENSORHUB_DEVICE_CACHE_TTL_SECONDS: 300
+      SENSORHUB_DEVICE_CACHE_TTL_SECONDS: 120
     depends_on:
       postgres:
         condition: service_healthy

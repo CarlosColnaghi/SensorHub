@@ -37,4 +37,4 @@ docker compose up postgres mqtt api ingestor sensor
 - `SENSORHUB_DB_NAME`: PostgreSQL database. Default: `sensorhub`.
 - `SENSORHUB_DB_USER`: PostgreSQL user. Default: `sensorhub`.
 - `SENSORHUB_DB_PASSWORD`: PostgreSQL password. Default: `sensorhub`.
-- `SENSORHUB_DEVICE_CACHE_TTL_SECONDS`: device cache TTL. Default: `300`.
+- `SENSORHUB_DEVICE_CACHE_TTL_SECONDS`: device cache TTL. Default: `120`.

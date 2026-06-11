@@ -110,7 +110,7 @@ Conexão com PostgreSQL:
 
 Cache:
 
-- `SENSORHUB_DEVICE_CACHE_TTL_SECONDS`: tempo opcional para expirar entradas do cache de dispositivos. Padrão sugerido: `300`.
+- `SENSORHUB_DEVICE_CACHE_TTL_SECONDS`: tempo opcional para expirar entradas do cache de dispositivos. Padrão sugerido: `120`.
 
 ### Cache de dispositivos
 

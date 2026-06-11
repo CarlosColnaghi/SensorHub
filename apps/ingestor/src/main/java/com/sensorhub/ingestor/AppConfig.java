@@ -28,7 +28,7 @@ record AppConfig(
             throw new ConfigException("SENSORHUB_DB_PORT must be greater than zero");
         }
 
-        long cacheTtlSeconds = readLong(values, "SENSORHUB_DEVICE_CACHE_TTL_SECONDS", 300);
+        long cacheTtlSeconds = readLong(values, "SENSORHUB_DEVICE_CACHE_TTL_SECONDS", 120);
         if (cacheTtlSeconds <= 0) {
             throw new ConfigException("SENSORHUB_DEVICE_CACHE_TTL_SECONDS must be greater than zero");
         }

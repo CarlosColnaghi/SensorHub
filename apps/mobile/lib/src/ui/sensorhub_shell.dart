@@ -241,11 +241,13 @@ class _SensorDetailScreenState extends State<SensorDetailScreen> {
   bool _refreshing = false;
   int _requestGeneration = 0;
 
+  bool get _isInactivated => widget.card.device.deviceStatus == 'INACTIVATED';
+
   @override
   void initState() {
     super.initState();
     _load();
-    if (widget.enablePolling) {
+    if (widget.enablePolling && !_isInactivated) {
       _refreshTimer = Timer.periodic(
         SensorHubController.pollInterval,
         (_) => _refresh(),
@@ -287,7 +289,7 @@ class _SensorDetailScreenState extends State<SensorDetailScreen> {
   }
 
   Future<void> _refresh() async {
-    if (_refreshing || !mounted) {
+    if (_isInactivated || _refreshing || !mounted) {
       return;
     }
     _refreshing = true;
@@ -330,7 +332,9 @@ class _SensorDetailScreenState extends State<SensorDetailScreen> {
           ),
         ),
         (_, _, final overview?) => RefreshIndicator(
-          onRefresh: () => _load(keepCurrent: true),
+          onRefresh: _isInactivated
+              ? () async {}
+              : () => _load(keepCurrent: true),
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
@@ -368,6 +372,9 @@ class _DetailHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final measurement = overview.latestMeasurement;
+    final status = card.device.deviceStatus == 'INACTIVATED'
+        ? 'INACTIVATED'
+        : overview.freshnessStatus;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -382,7 +389,7 @@ class _DetailHeader extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
-                StatusPill(status: overview.freshnessStatus),
+                StatusPill(status: status),
               ],
             ),
             const SizedBox(height: 8),

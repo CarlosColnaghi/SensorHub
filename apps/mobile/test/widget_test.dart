@@ -151,6 +151,38 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  testWidgets('inactivated detail screen does not refresh incoming data', (
+    tester,
+  ) async {
+    final repository = FakeSensorHubDataSource(
+      deviceStatus: 'INACTIVATED',
+      overviewTemperatures: const [24.7, 25.8],
+      overviewHumidities: const [58.2, 61.4],
+    );
+    await tester.pumpWidget(
+      SensorHubApp(repository: repository, enablePolling: true),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sensor da sala'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Inativo'), findsWidgets);
+    expect(find.text('24.7 °C'), findsWidgets);
+    expect(find.text('58.2 %'), findsWidgets);
+
+    await tester.pump(SensorHubController.pollInterval);
+    await tester.pumpAndSettle();
+
+    expect(repository.overviewLoadCount, 1);
+    expect(find.text('24.7 °C'), findsWidgets);
+    expect(find.text('58.2 %'), findsWidgets);
+    expect(find.text('25.8 °C'), findsNothing);
+    expect(find.text('61.4 %'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('detail screen pull-to-refresh updates latest measurement', (
     tester,
   ) async {
