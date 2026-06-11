@@ -10,11 +10,11 @@ A ideia do sistema é monitorar ambientes por meio de sensores IoT. O usuário p
 
 Este projeto foi desenvolvido com apoio de IA generativa, conforme a proposta da atividade da disciplina. A principal ferramenta utilizada foi o **Codex CLI**, executado no terminal dentro do repositório do projeto.
 
-O desenvolvimento contou com um agente do Codex usando o modelo **GPT-5.5**. Majoritariamente, na maioria dos casos, foi utilizado o nível de raciocínio **high**, configuração escolhida para favorecer tarefas mais longas e encadeadas, como leitura do monorepo, escrita de especificações, implementação incremental, revisão de regras de negócio, refatorações e execução de testes.
+O desenvolvimento contou com um agente do Codex usando o modelo **GPT-5.5**. Na maior parte do projeto, foi utilizado o nível de raciocínio **high**, configuração escolhida para favorecer tarefas mais longas e encadeadas, como leitura do monorepo, escrita de especificações, implementação incremental, revisão de regras de negócio, refatorações e execução de testes.
 
 O conceito central de desenvolvimento foi **spec-driven**. Antes de implementar as partes principais do sistema, foram criadas especificações funcionais e técnicas em `specs/`, descrevendo o comportamento esperado, contratos de dados, regras de negócio, estados de erro e critérios de aceite.
 
-Na prática, o Codex CLI foi usado como um par de programação orientado por specs. As interações seguiram um ciclo recorrente:
+Na prática, o Codex CLI foi usado como um par de programação orientado por especificações. As interações seguiram um ciclo recorrente:
 
 1. Definir ou ajustar a regra em uma especificação.
 2. Ler o código existente antes de alterar.
@@ -25,13 +25,13 @@ Na prática, o Codex CLI foi usado como um par de programação orientado por sp
 A IA foi usada principalmente para:
 
 - organizar as especificações do projeto;
-- propor a arquitetura inicial;
+- propor a arquitetura base;
 - gerar partes do código;
 - revisar regras de negócio;
 - criar e ajustar testes;
-- apoiar refatorações de nomes e estrutura;
-- documentar comandos de execução;
-- analisar inconsistências entre app mobile, API, ingestor e simulador.
+- apoiar refatorações;
+- documentar comandos de execução e regras de negócio;
+- analisar inconsistências entre as integrações;
 
 Apesar do apoio da IA, houve intervenção manual constante para tomar decisões de produto, revisar as sugestões, validar comportamento, executar testes e ajustar regras quando surgiam inconsistências.
 
@@ -89,8 +89,8 @@ Na fase atual, o sensor físico é representado pelo módulo `apps/sensor`, um s
 - Cadastro e gerenciamento de dispositivos.
 - Associação de dispositivos a ambientes.
 - Listagem de ambientes.
-- Dashboard mobile com leitura atual dos sensores.
-- Tela de detalhe com temperatura, umidade, histórico e overview do período.
+- Dashboard com leitura atual dos sensores.
+- Tela de detalhe com temperatura, umidade, histórico e overview com insights e resumos do período.
 - Identificação visual de sensores sem dados, offline ou inativos.
 - Inativação e reativação de sensores.
 - Ingestão de medições via MQTT.
@@ -170,7 +170,7 @@ Serviços principais:
 
 ### Infraestrutura
 
-| Serviço | Porta/endpoint local | Observações |
+| Serviço | Endereço local | Observações |
 | --- | --- | --- |
 | PostgreSQL | `localhost:5432` | Banco `sensorhub`, usuário `sensorhub`, senha `sensorhub`. |
 | Broker MQTT | `localhost:1883` | Porta TCP do Eclipse Mosquitto; tópico principal: `sensorhub/measurements`. |
@@ -245,9 +245,7 @@ A proposta inicial é criar um firmware ou script para rodar em uma **Raspberry 
 - publicar as leituras no broker MQTT no tópico `sensorhub/measurements`;
 - usar um `hardwareUuid` configurável para identificar o dispositivo;
 - tratar falhas de leitura do sensor físico;
-- permitir configuração do host MQTT, intervalo de publicação e identificador do dispositivo.
-
-Com isso, o fluxo deixaria de depender apenas de dados mockados e passaria a validar o caminho completo: sensor físico -> MQTT -> ingestor -> PostgreSQL -> API -> app mobile.
+- permitir configuração do host MQTT, intervalo de publicação e identificador do dispositivo;
 
 ### Outras evoluções possíveis
 
@@ -264,31 +262,37 @@ Com isso, o fluxo deixaria de depender apenas de dados mockados e passaria a val
 A ordem abaixo apresenta primeiro a experiência principal do usuário: dashboard, gerenciamento de dispositivos e ambientes, formulários, detalhes do sensor e estados operacionais.
 
 <p>
-  <img src="screenshots/01-mobile-dashboard-single-sensor.png" alt="Dashboard com um sensor online" width="180">
-  <img src="screenshots/02-mobile-dashboard-two-online-sensors.png" alt="Dashboard com dois sensores online" width="180">
-  <img src="screenshots/03-mobile-devices-list.png" alt="Lista de dispositivos" width="180">
-  <img src="screenshots/04-mobile-environments-empty.png" alt="Tela de ambientes sem cadastro" width="180">
+  <img src="screenshots/01-mobile-dashboard-single-sensor.png" alt="Dashboard com um sensor online" width="250">
+  <img src="screenshots/02-mobile-dashboard-two-online-sensors.png" alt="Dashboard com dois sensores online" width="250">
+  <img src="screenshots/03-mobile-devices-list.png" alt="Lista de dispositivos" width="250">
 </p>
 
 <p>
-  <img src="screenshots/05-mobile-profile.png" alt="Tela de perfil" width="180">
-  <img src="screenshots/06-mobile-new-environment.png" alt="Cadastro de ambiente" width="180">
-  <img src="screenshots/07-mobile-new-device.png" alt="Cadastro de dispositivo" width="180">
-  <img src="screenshots/08-mobile-devices-two-sensors.png" alt="Lista com dois dispositivos cadastrados" width="180">
+  <img src="screenshots/04-mobile-environments-empty.png" alt="Tela de ambientes sem cadastro" width="250">
+  <img src="screenshots/05-mobile-profile.png" alt="Tela de perfil" width="250">
+  <img src="screenshots/06-mobile-new-environment.png" alt="Cadastro de ambiente" width="250">
 </p>
 
 <p>
-  <img src="screenshots/09-mobile-environments-list.png" alt="Lista de ambientes cadastrados" width="180">
-  <img src="screenshots/10-mobile-sensor-detail-charts.png" alt="Detalhe do sensor com gráficos" width="180">
-  <img src="screenshots/11-mobile-sensor-detail-overview.png" alt="Detalhe do sensor com overview do período" width="180">
-  <img src="screenshots/12-mobile-edit-active-device.png" alt="Edição de dispositivo ativo" width="180">
+  <img src="screenshots/07-mobile-new-device.png" alt="Cadastro de dispositivo" width="250">
+  <img src="screenshots/08-mobile-devices-two-sensors.png" alt="Lista com dois dispositivos cadastrados" width="250">
+  <img src="screenshots/09-mobile-environments-list.png" alt="Lista de ambientes cadastrados" width="250">
 </p>
 
 <p>
-  <img src="screenshots/13-mobile-devices-active-inactive.png" alt="Lista com dispositivo ativo e inativo" width="180">
-  <img src="screenshots/14-mobile-dashboard-active-inactive.png" alt="Dashboard com sensor ativo e inativo" width="180">
-  <img src="screenshots/15-mobile-edit-inactive-device.png" alt="Edição de dispositivo inativo com opção de reativar" width="180">
-  <img src="screenshots/16-mobile-dashboard-offline.png" alt="Dashboard com sensor offline" width="180">
+  <img src="screenshots/10-mobile-sensor-detail-charts.png" alt="Detalhe do sensor com gráficos" width="250">
+  <img src="screenshots/11-mobile-sensor-detail-overview.png" alt="Detalhe do sensor com overview do período" width="250">
+  <img src="screenshots/12-mobile-edit-active-device.png" alt="Edição de dispositivo ativo" width="250">
+</p>
+
+<p>
+  <img src="screenshots/13-mobile-devices-active-inactive.png" alt="Lista com dispositivo ativo e inativo" width="250">
+  <img src="screenshots/14-mobile-dashboard-active-inactive.png" alt="Dashboard com sensor ativo e inativo" width="250">
+  <img src="screenshots/15-mobile-edit-inactive-device.png" alt="Edição de dispositivo inativo com opção de reativar" width="250">
+</p>
+
+<p>
+  <img src="screenshots/16-mobile-dashboard-offline.png" alt="Dashboard com sensor offline" width="250">
 </p>
 
 ### Infraestrutura e persistência
@@ -299,13 +303,3 @@ As capturas abaixo focam nos dados do fluxo: mensagens de telemetria chegando pe
   <img src="screenshots/17-infra-mqtt-client.png" alt="Cliente MQTT com mensagens de telemetria" width="520">
   <img src="screenshots/18-infra-measurements-query.png" alt="Consulta de medições persistidas no PostgreSQL" width="520">
 </p>
-
-## Especificações
-
-As principais decisões funcionais e técnicas estão documentadas em `specs/`:
-
-- `001-product-overview.md`
-- `002-api.md`
-- `003-sensor.md`
-- `004-mobile-application.md`
-- `005-ingestor.md`
