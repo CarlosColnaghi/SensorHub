@@ -17,7 +17,7 @@ DEFAULT_HARDWARE_UUID = "b0fee3a6-ae91-4265-9365-36f793f32f06"
 TEMPERATURE_UNIT = "CELSIUS"
 HUMIDITY_UNIT = "RELATIVE_PERCENT"
 
-LOGGER = logging.getLogger("sensorhub_mock_sensor")
+LOGGER = logging.getLogger("sensorhub_sensor")
 
 
 class ConfigError(ValueError):
@@ -47,7 +47,7 @@ class ValueRange:
 
 
 @dataclass(frozen=True)
-class MockSensorConfig:
+class SensorConfig:
     mqtt: MqttConfig
     hardware_uuids: tuple[str, ...]
     interval_seconds: float
@@ -73,7 +73,7 @@ class Publisher(Protocol):
         ...
 
 
-def read_config(environ: dict[str, str] | None = None) -> MockSensorConfig:
+def read_config(environ: dict[str, str] | None = None) -> SensorConfig:
     values = environ if environ is not None else os.environ
     interval_seconds = _read_float(values, "SENSORHUB_MEASUREMENT_INTERVAL_SECONDS", 5.0)
     if interval_seconds <= 0:
@@ -100,12 +100,12 @@ def read_config(environ: dict[str, str] | None = None) -> MockSensorConfig:
     temperature.validate("temperature")
     humidity.validate("humidity")
 
-    return MockSensorConfig(
+    return SensorConfig(
         mqtt=MqttConfig(
             host=values.get("SENSORHUB_MQTT_HOST", "mqtt"),
             port=mqtt_port,
             topic=values.get("SENSORHUB_MQTT_TOPIC", "sensorhub/measurements"),
-            client_id=values.get("SENSORHUB_MQTT_CLIENT_ID", "sensorhub-mock-sensor"),
+            client_id=values.get("SENSORHUB_MQTT_CLIENT_ID", "sensorhub-sensor"),
             qos=mqtt_qos,
         ),
         hardware_uuids=parse_hardware_uuids(
@@ -220,10 +220,10 @@ def build_payload(hardware_uuid: str, measurement: Measurement) -> str:
     )
 
 
-class MockSensorRunner:
+class SensorRunner:
     def __init__(
         self,
-        config: MockSensorConfig,
+        config: SensorConfig,
         publisher_factory: Callable[[MqttConfig], Publisher] = connect_mqtt,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
@@ -282,7 +282,7 @@ def main() -> int:
     configure_logging()
     try:
         config = read_config()
-        runner = MockSensorRunner(config)
+        runner = SensorRunner(config)
         signal.signal(signal.SIGTERM, runner.stop)
         signal.signal(signal.SIGINT, runner.stop)
         runner.run_forever()
@@ -291,7 +291,7 @@ def main() -> int:
         LOGGER.error("%s", exc)
         return 1
     except Exception:
-        LOGGER.exception("mock sensor failed")
+        LOGGER.exception("sensor failed")
         return 1
 
 

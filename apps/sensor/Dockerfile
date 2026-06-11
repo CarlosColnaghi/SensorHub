@@ -9,5 +9,5 @@ COPY src ./src
 
 ENV PYTHONPATH=/app/src
 
-ENTRYPOINT ["python", "-m", "sensorhub_mock_sensor.main"]
+ENTRYPOINT ["python", "-m", "sensorhub_sensor.main"]
 

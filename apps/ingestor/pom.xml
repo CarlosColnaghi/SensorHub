@@ -5,10 +5,10 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.sensorhub</groupId>
-    <artifactId>mqtt-ingestor</artifactId>
+    <artifactId>ingestor</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>SensorHub MQTT Ingestor</name>
-    <description>MQTT worker for SensorHub telemetry ingestion.</description>
+    <name>SensorHub Ingestor</name>
+    <description>MQTT ingestor for SensorHub telemetry ingestion.</description>
 
     <properties>
         <maven.compiler.release>25</maven.compiler.release>
@@ -65,7 +65,7 @@
                         <configuration>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>com.sensorhub.ingestor.SensorHubMqttIngestorApplication</mainClass>
+                                    <mainClass>com.sensorhub.ingestor.SensorHubIngestorApplication</mainClass>
                                 </transformer>
                             </transformers>
                         </configuration>

@@ -1,6 +1,6 @@
-# MQTT Ingestor
+# Ingestor
 
-Java 25 worker that consumes SensorHub telemetry from MQTT and persists valid measurements to PostgreSQL.
+Java 25 ingestor that consumes SensorHub telemetry from MQTT and persists valid measurements to PostgreSQL.
 
 ## Stack
 
@@ -16,13 +16,13 @@ With PostgreSQL and MQTT available:
 ```text
 mvn test
 mvn package
-java -jar target/mqtt-ingestor-0.0.1-SNAPSHOT.jar
+java -jar target/ingestor-0.0.1-SNAPSHOT.jar
 ```
 
 The normal local path is Docker Compose from the repository root:
 
 ```text
-docker compose up postgres mqtt api mqtt-ingestor mock-sensor
+docker compose up postgres mqtt api ingestor sensor
 ```
 
 ## Environment
@@ -30,7 +30,7 @@ docker compose up postgres mqtt api mqtt-ingestor mock-sensor
 - `SENSORHUB_MQTT_HOST`: MQTT broker host. Default: `mqtt`.
 - `SENSORHUB_MQTT_PORT`: MQTT broker port. Default: `1883`.
 - `SENSORHUB_MQTT_TOPIC`: telemetry topic. Default: `sensorhub/measurements`.
-- `SENSORHUB_MQTT_CLIENT_ID`: MQTT client id. Default: `sensorhub-mqtt-ingestor`.
+- `SENSORHUB_MQTT_CLIENT_ID`: MQTT client id. Default: `sensorhub-ingestor`.
 - `SENSORHUB_MQTT_QOS`: MQTT subscription QoS. Default: `0`.
 - `SENSORHUB_DB_HOST`: PostgreSQL host. Default: `postgres`.
 - `SENSORHUB_DB_PORT`: PostgreSQL port. Default: `5432`.

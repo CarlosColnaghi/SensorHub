@@ -8,12 +8,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from sensorhub_mock_sensor.main import (  # noqa: E402
+from sensorhub_sensor.main import (  # noqa: E402
     DEFAULT_HARDWARE_UUID,
     ConfigError,
     Measurement,
     MeasurementGenerator,
-    MockSensorRunner,
+    SensorRunner,
     ValueRange,
     build_payload,
     parse_hardware_uuids,
@@ -28,7 +28,7 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(config.mqtt.host, "mqtt")
         self.assertEqual(config.mqtt.port, 1883)
         self.assertEqual(config.mqtt.topic, "sensorhub/measurements")
-        self.assertEqual(config.mqtt.client_id, "sensorhub-mock-sensor")
+        self.assertEqual(config.mqtt.client_id, "sensorhub-sensor")
         self.assertEqual(config.mqtt.qos, 0)
         self.assertEqual(config.hardware_uuids, (DEFAULT_HARDWARE_UUID,))
         self.assertEqual(config.interval_seconds, 5.0)
@@ -159,7 +159,7 @@ class RunnerTest(unittest.TestCase):
         )
         publisher = FakePublisher()
 
-        runner = MockSensorRunner(
+        runner = SensorRunner(
             config,
             publisher_factory=lambda mqtt: publisher,
             sleep=lambda interval: runner.stop(),

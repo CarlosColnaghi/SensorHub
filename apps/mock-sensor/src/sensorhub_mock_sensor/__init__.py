@@ -1,2 +1,0 @@
-"""SensorHub mock sensor package."""
-

@@ -6,9 +6,9 @@ O SensorHub é um monorepo para desenvolver uma solução de monitoramento de am
 
 O produto principal será um aplicativo mobile em Flutter. O usuário poderá cadastrar dispositivos usando um UUID, associar cada dispositivo a um ambiente e visualizar dados como temperatura, umidade, última atualização e histórico de medições.
 
-Os dados serão enviados por dispositivos físicos, como Raspberry Pi ou microcontroladores, via MQTT. O papel do MQTT no projeto é transportar os dados brutos dos sensores até uma etapa de ingestão, funcionando como parte de um fluxo parecido com ETL: o sensor publica a leitura, um worker consome a mensagem, valida e transforma os dados quando necessário, e persiste as medições no PostgreSQL.
+Os dados serão enviados por dispositivos físicos, como Raspberry Pi ou microcontroladores, via MQTT. O papel do MQTT no projeto é transportar os dados brutos dos sensores até uma etapa de ingestão, funcionando como parte de um fluxo parecido com ETL: o sensor publica a leitura, um ingestor consome a mensagem, valida e transforma os dados quando necessário, e persiste as medições no PostgreSQL.
 
-Na primeira fase, principalmente para acelerar o desenvolvimento, esse fluxo poderá ser mockado. Em vez de depender de sensor físico, broker MQTT e worker reais, o monorepo pode conter um script Python responsável por gerar dados simulados e persistir ou disponibilizar essas medições como se elas tivessem passado pelo fluxo sensor -> MQTT -> worker.
+Na primeira fase, principalmente para acelerar o desenvolvimento, esse fluxo poderá ser simulado. Em vez de depender de sensor físico real, o monorepo pode conter um script Python responsável por gerar dados simulados e publicá-los como se eles tivessem passado pelo fluxo sensor -> MQTT -> ingestor.
 
 ## Objetivo do monorepo
 
@@ -16,8 +16,8 @@ Manter, em um único repositório, as aplicações e os pacotes que compõem o S
 
 - Aplicativo mobile Flutter.
 - API/backend em Java 25 com Spring Boot, JPA e Flyway para consulta e gerenciamento.
-- Worker em Java puro, com uso mínimo de frameworks, para ingestão de mensagens MQTT e persistência em PostgreSQL.
-- Script Python de simulação para gerar dados mockados na primeira fase e persistir medições no PostgreSQL.
+- Ingestor em Java puro, com uso mínimo de frameworks, para ingestão de mensagens MQTT e persistência em PostgreSQL.
+- Script Python de simulação para gerar dados mockados na primeira fase e publicar medições via MQTT.
 - Pacotes compartilhados de contratos, modelos, validações ou documentação.
 - Especificações funcionais e técnicas que orientam o desenvolvimento por agentes.
 
@@ -33,8 +33,8 @@ SensorHub/
   apps/
     mobile/
     api/
-    mqtt-ingestor/
-    mock-sensor/
+    ingestor/
+    sensor/
   packages/
     shared/
   infra/
@@ -81,7 +81,7 @@ Antes de criar aplicações, comece pelas estruturas de dados e contratos:
 - Relacionamentos que darão origem às tabelas.
 - Contratos de persistência e consulta que a API deverá respeitar.
 
-Essas definições devem guiar o script Python, a API, o app mobile e, posteriormente, o worker MQTT e o firmware.
+Essas definições devem guiar o script Python, a API, o app mobile e, posteriormente, o ingestor MQTT e o firmware.
 
 ## Domínios principais
 
@@ -130,9 +130,9 @@ Esse script deve:
 
 - Gerar leituras simuladas de temperatura e umidade.
 - Usar UUIDs de dispositivos conhecidos ou configuráveis.
-- Simular timestamps de medição e recebimento.
-- Persistir os dados no PostgreSQL.
-- Permitir desenvolvimento do app e da API sem depender de hardware físico, broker MQTT ou worker real.
+- Simular timestamps de medição.
+- Publicar os dados via MQTT.
+- Permitir desenvolvimento do app e da API sem depender de hardware físico, broker MQTT ou ingestor real.
 
 Quando o fluxo real for implementado, o script deve continuar útil para testes locais, demos e geração de massa de dados.
 
@@ -162,12 +162,12 @@ Estas decisões já estão definidas para orientar o desenvolvimento inicial:
 
 - Aplicativo mobile: Flutter.
 - API/backend: Java 25, Spring Boot, JPA e Flyway.
-- Worker MQTT: Java puro, com uso mínimo de frameworks.
+- Ingestor MQTT: Java puro, com uso mínimo de frameworks.
 - Banco de dados: PostgreSQL.
 - Script de simulação de sensores: Python.
 - Execução local e integração entre serviços: Docker Compose.
 
-O worker deve priorizar simplicidade, baixo overhead e eficiência. Evite frameworks pesados nessa aplicação, a menos que a necessidade técnica seja clara e documentada.
+O ingestor deve priorizar simplicidade, baixo overhead e eficiência. Evite frameworks pesados nessa aplicação, a menos que a necessidade técnica seja clara e documentada.
 
 Estas decisões ainda estão abertas e devem ser fechadas conforme as specs evoluírem:
 
@@ -200,10 +200,10 @@ Quando não for possível testar, explique claramente o motivo e o risco restant
 8. Implementar endpoints iniciais para cadastro de dispositivo, ambientes, leitura atual e histórico.
 9. Incluir a API no Docker Compose.
 10. Definir a estratégia de dados mockados para a primeira fase.
-11. Criar o script Python para simular sensores e persistir medições no PostgreSQL.
+11. Criar o script Python para simular sensores e publicar medições via MQTT.
 12. Incluir o script Python no Docker Compose.
 13. Criar scaffold do app Flutter.
 14. Implementar fluxos do app para cadastro de dispositivo, associação a ambiente, leitura atual e histórico.
 15. Incluir o app mobile no fluxo de desenvolvimento previsto pelo Docker Compose quando aplicável.
 16. Em fase posterior, especificar e implementar o firmware ou integração com sensor físico.
-17. Em fase posterior, especificar e implementar o worker MQTT em Java puro.
+17. Em fase posterior, especificar e implementar o ingestor MQTT em Java puro.

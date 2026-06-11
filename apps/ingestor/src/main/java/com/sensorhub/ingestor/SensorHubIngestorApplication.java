@@ -5,10 +5,10 @@ import java.sql.Connection;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public final class SensorHubMqttIngestorApplication {
-    private static final Logger LOGGER = Logger.getLogger(SensorHubMqttIngestorApplication.class.getName());
+public final class SensorHubIngestorApplication {
+    private static final Logger LOGGER = Logger.getLogger(SensorHubIngestorApplication.class.getName());
 
-    private SensorHubMqttIngestorApplication() {
+    private SensorHubIngestorApplication() {
     }
 
     public static void main(String[] args) {
@@ -47,7 +47,7 @@ public final class SensorHubMqttIngestorApplication {
             LOGGER.severe(exception.getMessage());
             System.exit(1);
         } catch (Exception exception) {
-            LOGGER.log(Level.SEVERE, "MQTT ingestor failed", exception);
+            LOGGER.log(Level.SEVERE, "ingestor failed", exception);
             System.exit(1);
         }
     }

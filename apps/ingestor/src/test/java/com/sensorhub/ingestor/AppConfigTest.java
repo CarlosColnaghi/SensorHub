@@ -16,7 +16,7 @@ class AppConfigTest {
         assertEquals("mqtt", config.mqtt().host());
         assertEquals(1883, config.mqtt().port());
         assertEquals("sensorhub/measurements", config.mqtt().topic());
-        assertEquals("sensorhub-mqtt-ingestor", config.mqtt().clientId());
+        assertEquals("sensorhub-ingestor", config.mqtt().clientId());
         assertEquals(0, config.mqtt().qos());
         assertEquals("postgres", config.database().host());
         assertEquals(5432, config.database().port());

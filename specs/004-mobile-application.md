@@ -1,4 +1,4 @@
-# Mobile App
+# Mobile Application
 
 ## Objetivo
 

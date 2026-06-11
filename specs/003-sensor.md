@@ -1,16 +1,16 @@
-# Mock Sensor
+# Sensor
 
 ## Objetivo
 
-Definir o script Python responsável por gerar medições simuladas e publicá-las em um broker MQTT, permitindo desenvolver e testar o fluxo de ingestão sem depender de sensor físico real.
+Definir o script Python responsável por mockar os dados de um sensor, gerando medições simuladas e publicando-as em um broker MQTT. O objetivo é permitir desenvolver e testar o fluxo de ingestão sem depender de sensor físico real.
 
-O mock sensor não deve interagir diretamente com o PostgreSQL. Ele deve simular apenas o comportamento de um dispositivo publicando telemetria no tópico MQTT configurado. A validação do dispositivo, resolução de `hardwareUuid` para `devices.uuid` e persistência das medições ficam sob responsabilidade do worker de ingestão definido em `specs/005-worker.md`.
+O sensor simulado não deve interagir diretamente com o PostgreSQL. Ele deve simular apenas o comportamento de um dispositivo publicando telemetria no tópico MQTT configurado. A validação do dispositivo, resolução de `hardwareUuid` para `devices.uuid` e persistência das medições ficam sob responsabilidade do ingestor definido em `specs/005-ingestor.md`.
 
 ## Escopo
 
 Incluído nesta spec:
 
-- Script Python em `apps/mock-sensor`.
+- Script Python em `apps/sensor`.
 - Configuração por variáveis de ambiente.
 - Conexão com broker MQTT.
 - Publicação contínua de mensagens MQTT a cada intervalo configurável.
@@ -83,7 +83,7 @@ Campos:
 - `humidityUnit`: unidade da umidade, inicialmente `RELATIVE_PERCENT`.
 - `measuredAt`: timestamp da medição gerado pelo simulador.
 
-O campo `receivedAt` não deve ser publicado pelo mock sensor. Ele deve ser definido pelo worker no momento da persistência.
+O campo `receivedAt` não deve ser publicado pelo sensor simulado. Ele deve ser definido pelo ingestor no momento da persistência.
 
 ### Variáveis de ambiente
 
@@ -92,7 +92,7 @@ Conexão MQTT:
 - `SENSORHUB_MQTT_HOST`: host do broker MQTT. Padrão sugerido: `mqtt`.
 - `SENSORHUB_MQTT_PORT`: porta do broker MQTT. Padrão sugerido: `1883`.
 - `SENSORHUB_MQTT_TOPIC`: tópico de telemetria. Padrão: `sensorhub/measurements`.
-- `SENSORHUB_MQTT_CLIENT_ID`: identificador do cliente MQTT. Padrão sugerido: `sensorhub-mock-sensor`.
+- `SENSORHUB_MQTT_CLIENT_ID`: identificador do cliente MQTT. Padrão sugerido: `sensorhub-sensor`.
 - `SENSORHUB_MQTT_QOS`: QoS usado na publicação. Padrão inicial: `0`.
 
 Dispositivos simulados:
@@ -128,7 +128,7 @@ Umidade:
 - Temperatura deve ser arredondada para duas casas decimais.
 - Umidade deve ser arredondada para duas casas decimais.
 - O intervalo padrão entre ciclos deve ser de 5 segundos.
-- O mock sensor deve publicar somente mensagens de telemetria; qualquer persistência deve acontecer no worker MQTT.
+- O sensor simulado deve publicar somente mensagens de telemetria; qualquer persistência deve acontecer no ingestor MQTT.
 
 ## Erros e casos limite
 
@@ -143,7 +143,7 @@ Umidade:
 
 ## Critérios de aceite
 
-- Existe um script Python em `apps/mock-sensor`.
+- Existe um script Python em `apps/sensor`.
 - O script lê configuração por variáveis de ambiente.
 - O script aceita `SENSORHUB_HARDWARE_UUIDS` com um ou mais UUIDs separados por vírgula.
 - O script conecta ao broker MQTT configurado.
@@ -154,7 +154,7 @@ Umidade:
 - O script mantém variações consecutivas próximas, respeitando os steps máximos configurados.
 - O intervalo padrão de geração é 5 segundos.
 - Existe configuração no Docker Compose para executar o broker MQTT.
-- Existe configuração no Docker Compose para executar o mock sensor apontando para o broker MQTT.
+- Existe configuração no Docker Compose para executar o sensor simulado apontando para o broker MQTT.
 - Existem testes ou verificação objetiva cobrindo configuração, geração de valores e serialização/publicação do payload.
 
 ## Testes
@@ -188,6 +188,6 @@ Umidade:
 - O script deve usar uma biblioteca MQTT adequada para Python, como `paho-mqtt`.
 - A implementação deve evitar frameworks pesados.
 - O processo pode ser um loop simples com `time.sleep`.
-- Para execução local, o Docker Compose deve iniciar o broker MQTT antes do mock sensor.
-- O serviço do mock sensor pode usar `restart: on-failure` no Docker Compose para tolerar indisponibilidade temporária do broker.
+- Para execução local, o Docker Compose deve iniciar o broker MQTT antes do sensor simulado.
+- O serviço do sensor simulado pode usar `restart: on-failure` no Docker Compose para tolerar indisponibilidade temporária do broker.
 - O script deve ser útil para desenvolvimento local, demos e geração de massa de dados.

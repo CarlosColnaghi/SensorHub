@@ -1,16 +1,16 @@
-# MQTT Ingestor
+# Ingestor
 
 ## Objetivo
 
-Definir o worker de ingestão responsável por consumir mensagens MQTT de telemetria, validar os payloads recebidos, resolver o `hardwareUuid` do sensor para o UUID interno do dispositivo e persistir medições válidas no PostgreSQL.
+Definir o ingestor responsável por consumir mensagens MQTT de telemetria, validar os payloads recebidos, resolver o `hardwareUuid` do sensor para o UUID interno do dispositivo e persistir medições válidas no PostgreSQL.
 
-O worker deve ser desenvolvido em Java 25, com uso mínimo de frameworks. Ele ocupa a responsabilidade de persistência que antes era prevista no mock sensor. O mock sensor passa a publicar mensagens MQTT, enquanto o worker executa a etapa de ingestão e gravação.
+O ingestor deve ser desenvolvido em Java 25, com uso mínimo de frameworks. Ele ocupa a responsabilidade de persistência que antes era prevista no sensor simulado. O sensor simulado passa a publicar mensagens MQTT, enquanto o ingestor executa a etapa de ingestão e gravação.
 
 ## Escopo
 
 Incluído nesta spec:
 
-- Aplicação Java em `apps/mqtt-ingestor`.
+- Aplicação Java em `apps/ingestor`.
 - Runtime Java 25.
 - Consumo de mensagens MQTT.
 - Validação do payload JSON de telemetria.
@@ -32,9 +32,9 @@ Fora deste escopo inicial:
 
 ## Comportamento esperado
 
-Ao iniciar, o worker deve ler as variáveis de ambiente, conectar ao PostgreSQL e conectar ao broker MQTT.
+Ao iniciar, o ingestor deve ler as variáveis de ambiente, conectar ao PostgreSQL e conectar ao broker MQTT.
 
-Depois de conectado ao broker, o worker deve assinar o tópico de telemetria configurado. Para cada mensagem recebida, o worker deve:
+Depois de conectado ao broker, o ingestor deve assinar o tópico de telemetria configurado. Para cada mensagem recebida, o ingestor deve:
 
 1. Ler o payload como JSON UTF-8.
 2. Validar os campos obrigatórios.
@@ -42,10 +42,10 @@ Depois de conectado ao broker, o worker deve assinar o tópico de telemetria con
 4. Resolver `hardwareUuid` para `devices.uuid`.
 5. Verificar que o dispositivo está com status `ACTIVATED`.
 6. Persistir a medição na tabela `measurements`.
-7. Definir `received_at` com o horário de recebimento/processamento no worker.
+7. Definir `received_at` com o horário de recebimento/processamento no ingestor.
 8. Registrar sucesso ou falha em log.
 
-Se uma mensagem for inválida, o worker deve registrar o erro e continuar consumindo novas mensagens. Uma mensagem inválida não deve encerrar o processo.
+Se uma mensagem for inválida, o ingestor deve registrar o erro e continuar consumindo novas mensagens. Uma mensagem inválida não deve encerrar o processo.
 
 ## Dados e contratos
 
@@ -57,7 +57,7 @@ Tópico padrão:
 sensorhub/measurements
 ```
 
-O worker deve assinar esse tópico por padrão. A primeira versão usa um único tópico compartilhado por todos os dispositivos. A introdução de tópicos por dispositivo deve ser documentada em spec futura, se necessária.
+O ingestor deve assinar esse tópico por padrão. A primeira versão usa um único tópico compartilhado por todos os dispositivos. A introdução de tópicos por dispositivo deve ser documentada em spec futura, se necessária.
 
 ### Payload MQTT
 
@@ -83,12 +83,12 @@ Campos obrigatórios:
 - `humidityUnit`
 - `measuredAt`
 
-O worker deve aceitar inicialmente:
+O ingestor deve aceitar inicialmente:
 
 - `temperatureUnit`: `CELSIUS`
 - `humidityUnit`: `RELATIVE_PERCENT`
 
-O campo `receivedAt` não deve ser aceito como entrada de confiança. Mesmo que venha no payload, o worker deve ignorá-lo e gerar `received_at` no momento do processamento.
+O campo `receivedAt` não deve ser aceito como entrada de confiança. Mesmo que venha no payload, o ingestor deve ignorá-lo e gerar `received_at` no momento do processamento.
 
 ### Variáveis de ambiente
 
@@ -97,7 +97,7 @@ Conexão MQTT:
 - `SENSORHUB_MQTT_HOST`: host do broker MQTT. Padrão sugerido: `mqtt`.
 - `SENSORHUB_MQTT_PORT`: porta do broker MQTT. Padrão sugerido: `1883`.
 - `SENSORHUB_MQTT_TOPIC`: tópico de telemetria. Padrão: `sensorhub/measurements`.
-- `SENSORHUB_MQTT_CLIENT_ID`: identificador do consumidor MQTT. Padrão sugerido: `sensorhub-mqtt-ingestor`.
+- `SENSORHUB_MQTT_CLIENT_ID`: identificador do consumidor MQTT. Padrão sugerido: `sensorhub-ingestor`.
 - `SENSORHUB_MQTT_QOS`: QoS usado na assinatura. Padrão inicial: `0`.
 
 Conexão com PostgreSQL:
@@ -133,7 +133,7 @@ FROM devices
 WHERE hardware_uuid = ?;
 ```
 
-O worker deve persistir medições apenas para dispositivos com status `ACTIVATED`. Dispositivos `INACTIVATED` devem ser ignorados e registrados em log.
+O ingestor deve persistir medições apenas para dispositivos com status `ACTIVATED`. Dispositivos `INACTIVATED` devem ser ignorados e registrados em log.
 
 O cache deve evitar consultas repetidas a `devices`, mas não deve impedir que mudanças administrativas sejam refletidas. Por isso, a primeira implementação deve expirar entradas periodicamente usando `SENSORHUB_DEVICE_CACHE_TTL_SECONDS`.
 
@@ -166,18 +166,18 @@ INSERT INTO measurements (
 ## Regras de negócio
 
 - O payload MQTT deve identificar o dispositivo por `hardwareUuid`.
-- O worker deve resolver `hardwareUuid` para `devices.uuid` antes de persistir qualquer medição.
-- O worker não deve persistir `hardwareUuid` em `measurements`.
-- O worker deve persistir medições usando o UUID interno em `measurements.device_uuid`.
+- O ingestor deve resolver `hardwareUuid` para `devices.uuid` antes de persistir qualquer medição.
+- O ingestor não deve persistir `hardwareUuid` em `measurements`.
+- O ingestor deve persistir medições usando o UUID interno em `measurements.device_uuid`.
 - Apenas dispositivos com status `ACTIVATED` devem receber novas medições.
 - Dispositivos `INACTIVATED` devem ter novas leituras descartadas, preservando o histórico existente.
-- `received_at` deve ser definido pelo worker e não pelo sensor.
+- `received_at` deve ser definido pelo ingestor e não pelo sensor.
 - `measured_at` deve representar o timestamp informado pelo sensor ou simulador.
 - Temperatura e umidade devem ser numéricas.
 - Temperatura deve armazenar a unidade recebida, inicialmente `CELSIUS`.
 - Umidade deve armazenar a unidade recebida, inicialmente `RELATIVE_PERCENT`.
 - A API pública continua sem endpoints para criar medições.
-- O worker deve continuar processando mensagens depois de falhas isoladas de payload ou persistência.
+- O ingestor deve continuar processando mensagens depois de falhas isoladas de payload ou persistência.
 
 ## Erros e casos limite
 
@@ -190,12 +190,12 @@ INSERT INTO measurements (
 - `measuredAt` inválido deve ser rejeitado.
 - Falha de conexão com PostgreSQL deve impedir a inicialização ou deixar o processo em retry controlado.
 - Falha de conexão com broker MQTT deve impedir a inicialização ou deixar o processo em retry controlado.
-- Falha temporária de insert deve ser registrada; o worker deve continuar processando mensagens seguintes quando possível.
+- Falha temporária de insert deve ser registrada; o ingestor deve continuar processando mensagens seguintes quando possível.
 - Mensagens duplicadas podem gerar medições duplicadas na primeira versão, pois o payload inicial não possui identificador único de evento.
 
 ## Critérios de aceite
 
-- Existe uma aplicação Java em `apps/mqtt-ingestor`.
+- Existe uma aplicação Java em `apps/ingestor`.
 - A aplicação usa Java 25.
 - A aplicação conecta ao broker MQTT configurado.
 - A aplicação assina o tópico `sensorhub/measurements` por padrão.
@@ -205,7 +205,7 @@ INSERT INTO measurements (
 - A aplicação persiste medições válidas em `measurements`.
 - A aplicação define `received_at` no momento do processamento.
 - A aplicação mantém cache em memória com expiração para resolução de dispositivos.
-- Existe configuração no Docker Compose para executar o worker.
+- Existe configuração no Docker Compose para executar o ingestor.
 - Existem testes ou verificação objetiva cobrindo parsing, validação, resolução de dispositivo e persistência.
 
 ## Testes
@@ -224,7 +224,7 @@ INSERT INTO measurements (
 - Testar resolução de `hardwareUuid` para `deviceUuid`.
 - Testar que dispositivos `INACTIVATED` não recebem novas medições.
 - Testar inserção de medição usando `device_uuid` interno.
-- Testar persistência de `received_at` definido pelo worker.
+- Testar persistência de `received_at` definido pelo ingestor.
 
 ### MQTT
 
@@ -234,11 +234,11 @@ INSERT INTO measurements (
 
 ## Observações técnicas
 
-- O worker deve usar Java 25.
+- O ingestor deve usar Java 25.
 - A implementação deve priorizar Java puro e bibliotecas pequenas.
 - Uma biblioteca MQTT como Eclipse Paho pode ser usada para conexão e assinatura.
 - O acesso ao PostgreSQL pode usar JDBC diretamente ou uma camada leve, evitando frameworks pesados.
 - As migrations continuam sob responsabilidade da API com Flyway.
-- Para execução local, o Docker Compose deve iniciar PostgreSQL, broker MQTT, API, worker e mock sensor.
-- O worker deve iniciar depois do PostgreSQL saudável e depois da API iniciar, para reduzir risco de consultar tabelas antes da criação do schema.
-- O serviço do worker pode usar `restart: on-failure` no Docker Compose para tolerar a corrida inicial enquanto a API aplica as migrations.
+- Para execução local, o Docker Compose deve iniciar PostgreSQL, broker MQTT, API, ingestor e sensor.
+- O ingestor deve iniciar depois do PostgreSQL saudável e depois da API iniciar, para reduzir risco de consultar tabelas antes da criação do schema.
+- O serviço do ingestor pode usar `restart: on-failure` no Docker Compose para tolerar a corrida inicial enquanto a API aplica as migrations.

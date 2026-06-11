@@ -37,7 +37,7 @@ record AppConfig(
                 values.getOrDefault("SENSORHUB_MQTT_HOST", "mqtt"),
                 mqttPort,
                 values.getOrDefault("SENSORHUB_MQTT_TOPIC", "sensorhub/measurements"),
-                values.getOrDefault("SENSORHUB_MQTT_CLIENT_ID", "sensorhub-mqtt-ingestor"),
+                values.getOrDefault("SENSORHUB_MQTT_CLIENT_ID", "sensorhub-ingestor"),
                 mqttQos
         );
         DatabaseConfig database = new DatabaseConfig(
