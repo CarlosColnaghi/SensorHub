@@ -143,6 +143,14 @@ SensorHub/
   docker-compose.yml
 ```
 
+## Requisitos
+
+Para executar o projeto completo em ambiente local, instale:
+
+- Docker com Docker Compose, ou Podman com Podman Compose, para subir PostgreSQL, MQTT, API, ingestor e sensor simulado.
+- Flutter SDK com Dart compatível com `^3.12.1`, para rodar o aplicativo mobile.
+- Android Studio com Android SDK e um emulador Android, ou um dispositivo Android físico, para executar o app.
+
 ## Como executar
 
 Suba os serviços principais a partir da raiz do repositório:
@@ -257,7 +265,7 @@ A proposta inicial é criar um firmware ou script para rodar em uma **Raspberry 
 
 ## Screenshots
 
-### Fluxo do aplicativo mobile
+### Aplicativo mobile
 
 A ordem abaixo apresenta primeiro a experiência principal do usuário: dashboard, gerenciamento de dispositivos e ambientes, formulários, detalhes do sensor e estados operacionais.
 
