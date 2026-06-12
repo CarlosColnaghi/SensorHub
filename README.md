@@ -35,54 +35,53 @@ A IA foi usada principalmente para:
 
 Apesar do apoio da IA, houve intervenção manual constante para tomar decisões de produto, revisar as sugestões, validar comportamento, executar testes e ajustar regras quando surgiam inconsistências.
 
-## Sobre o aplicativo
+## Arquitetura do sistema
 
 O aplicativo mobile do SensorHub foi construído em Flutter e consome uma API própria para exibir dados persistidos no PostgreSQL.
 
 ```mermaid
 flowchart LR
-    subgraph Client["Cliente"]
-        App["apps/mobile<br/>Flutter app"]
+    subgraph MobileClient["Cliente mobile"]
+        MobileApp["apps/mobile<br/>Flutter<br/>Aplicativo do usuário"]
     end
 
-    subgraph Backend["Backend HTTP"]
-        API["apps/api<br/>Spring Boot API<br/>Controllers + Services + JPA"]
+    subgraph HttpApi["API REST"]
+        RestApi["apps/api<br/>Spring Boot<br/>API REST, serviços, JPA e Flyway"]
     end
 
-    subgraph Messaging["Mensageria"]
-        MQTT["mqtt<br/>Eclipse Mosquitto<br/>topic: sensorhub/measurements"]
+    subgraph MqttBroker["Mensageria MQTT"]
+        Broker["mqtt<br/>Eclipse Mosquitto<br/>Broker MQTT<br/>Tópico: sensorhub/measurements"]
     end
 
-    subgraph Ingestion["Ingestão"]
-        Sensor["apps/sensor<br/>Python sensor simulator"]
-        Ingestor["apps/ingestor<br/>Java MQTT ingestor<br/>Payload validation + device resolution"]
+    subgraph TelemetryIngestion["Coleta e ingestão de telemetria"]
+        Simulator["apps/sensor<br/>Python<br/>Simulador de sensor"]
+        MqttIngestor["apps/ingestor<br/>Java<br/>Valida JSON, identifica dispositivo cadastrado e persiste medições"]
     end
 
-    subgraph Persistence["Persistência"]
-        DB[("postgres<br/>PostgreSQL<br/>users / environments / devices / measurements")]
-        Flyway["Flyway migrations<br/>owned by API"]
+    subgraph DataPersistence["Persistência"]
+        Database[("postgres<br/>PostgreSQL<br/>Tabelas:<br/>users, environments,<br/>devices, measurements")]
     end
 
-    App -->|"HTTP REST<br/>/api/v1"| API
-    API -->|"JPA read/write<br/>users, environments, devices"| DB
-    API -->|"read-only queries<br/>measurements, dashboard, overview"| DB
-    Flyway -->|"schema versioning"| DB
+    MobileApp -->|"HTTP REST<br/>/api/v1"| RestApi
+    RestApi -->|"JPA<br/>cadastro e consulta de usuários, ambientes e dispositivos"| Database
+    RestApi -->|"JPA<br/>consulta de medições e resumos do dashboard"| Database
+    RestApi -->|"Flyway<br/>versionamento do esquema do banco"| Database
 
-    Sensor -->|"MQTT publish<br/>JSON telemetry"| MQTT
-    MQTT -->|"MQTT subscribe"| Ingestor
-    Ingestor -->|"JDBC lookup<br/>devices.hardware_uuid + status"| DB
-    Ingestor -->|"JDBC insert<br/>valid measurements only"| DB
+    Simulator -->|"publica telemetria<br/>JSON via MQTT"| Broker
+    Broker -->|"mensagens recebidas<br/>do tópico sensorhub/measurements"| MqttIngestor
+    MqttIngestor -->|"JDBC<br/>busca dispositivo por hardwareUuid e verifica status"| Database
+    MqttIngestor -->|"JDBC<br/>persiste medições válidas"| Database
 ```
 
 O fluxo previsto é:
 
 1. Um sensor físico ou simulado publica uma leitura via MQTT.
-2. O `ingestor` consome a mensagem, valida o payload e verifica o dispositivo no banco.
+2. O `ingestor` consome a mensagem, valida o JSON e verifica o dispositivo no banco.
 3. Leituras válidas de dispositivos ativos são persistidas no PostgreSQL.
 4. A API consulta os dados persistidos e entrega informações ao app mobile.
 5. O app exibe cards de sensores, detalhes, gráficos e estados como online, offline, sem dados ou inativo.
 
-Na fase atual, o sensor físico é representado pelo módulo `apps/sensor`, um simulador em Python que mocka dados de temperatura e umidade e publica mensagens MQTT.
+Na fase atual, o sensor físico é representado pelo módulo `apps/sensor`, um simulador em Python que gera dados simulados de temperatura e umidade e publica mensagens MQTT.
 
 ## Funcionalidades
 
@@ -90,7 +89,7 @@ Na fase atual, o sensor físico é representado pelo módulo `apps/sensor`, um s
 - Associação de dispositivos a ambientes.
 - Listagem de ambientes.
 - Dashboard com leitura atual dos sensores.
-- Tela de detalhe com temperatura, umidade, histórico e overview com insights e resumos do período.
+- Tela de detalhe com temperatura, umidade, histórico e visão geral com insights e resumos do período.
 - Identificação visual de sensores sem dados, offline ou inativos.
 - Inativação e reativação de sensores.
 - Ingestão de medições via MQTT.
@@ -165,8 +164,8 @@ Serviços principais:
 | Serviço | Endereço local | Observações |
 | --- | --- | --- |
 | API | `http://localhost:8080` | Base HTTP da API Spring Boot. |
-| Sensor simulado | Sem porta exposta | Publica leituras mockadas no tópico MQTT. |
-| Ingestor | Sem porta exposta | Consome mensagens MQTT, valida o payload e persiste medições no PostgreSQL. |
+| Sensor simulado | Sem porta exposta | Publica leituras simuladas no tópico MQTT. |
+| Ingestor | Sem porta exposta | Consome mensagens MQTT, valida o JSON e persiste medições no PostgreSQL. |
 
 ### Infraestrutura
 
@@ -252,6 +251,7 @@ A proposta inicial é criar um firmware ou script para rodar em uma **Raspberry 
 - Adicionar autenticação e autorização na API.
 - Melhorar o provisionamento de dispositivos.
 - Adicionar alertas para temperatura ou umidade fora de faixa.
+- Testar e implementar suporte a outros tipos de sensores, além de temperatura e umidade.
 - Implementar notificações no app mobile.
 - Criar uma tela de histórico tabular ou exportação de medições.
 
@@ -281,7 +281,7 @@ A ordem abaixo apresenta primeiro a experiência principal do usuário: dashboar
 
 <p>
   <img src="screenshots/10-mobile-sensor-detail-charts.png" alt="Detalhe do sensor com gráficos" width="250">
-  <img src="screenshots/11-mobile-sensor-detail-overview.png" alt="Detalhe do sensor com overview do período" width="250">
+  <img src="screenshots/11-mobile-sensor-detail-overview.png" alt="Detalhe do sensor com visão geral do período" width="250">
   <img src="screenshots/12-mobile-edit-active-device.png" alt="Edição de dispositivo ativo" width="250">
 </p>
 
